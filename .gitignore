@@ -1,0 +1,88 @@
+# ---------- Dữ liệu crawler (không đưa lên GitHub) ----------
+# Bài báo thu thập được, State DB, thống kê và log
+data/
+*.jsonl
+*.jsonl.gz
+*.jsonl.tmp
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.log
+logs/
+
+# Trang bài thật lưu để thử parser: có bản quyền của báo
+tests/fixtures/real/
+
+# Cấu hình riêng trên từng máy (nếu có)
+config.local.yaml
+*.local.yaml
+.env
+.env.*
+
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+pip-wheel-metadata/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Môi trường ảo
+.venv/
+venv/
+env/
+ENV/
+.python-version
+
+# Test, coverage, type check, lint
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.tox/
+.nox/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.pytype/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# ---------- Editor / IDE ----------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.settings/
+*.sublime-workspace
+
+# ---------- Hệ điều hành ----------
+.DS_Store
+._*
+Thumbs.db
+ehthumbs.db
+desktop.ini
+$RECYCLE.BIN/

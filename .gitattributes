@@ -1,0 +1,10 @@
+# Giữ xuống dòng kiểu LF trong repo dù làm việc trên Windows hay Ubuntu.
+* text=auto eol=lf
+*.html text eol=lf
+*.xml text eol=lf
+*.py text eol=lf
+*.yaml text eol=lf
+*.md text eol=lf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+*.gz binary

@@ -1,0 +1,92 @@
+# Cấu hình crawler. Đường dẫn tương đối tính từ thư mục chứa file này.
+
+# Ghi tên dự án và link repo để quản trị các báo biết ai đang truy cập.
+# Không dùng User-Agent mặc định của thư viện (robots.txt của VnExpress chặn "Scrapy").
+user_agent: "news-crawler/0.1 (+https://github.com/VietCH57/news-crawler; student project)"
+
+data_dir: data
+
+rss_interval_seconds: 300          # đọc RSS mỗi 5 phút
+recheck_after_hours: [1, 6, 24]    # tải lại bài sau 1, 6, 24 giờ để phát hiện sửa/gỡ
+request_timeout: 20
+max_retries: 3
+retry_delays_seconds: [60, 300, 1800]
+min_words: 50                      # nội dung ngắn hơn thì đánh dấu parse_ok = false
+fsync: false                       # true = an toàn hơn khi mất điện, chậm hơn
+
+# Khi máy tắt lâu hơn ngưỡng này, lúc chạy lại sẽ lấy bài của những ngày bị lỡ
+# từ sitemap / trang lưu trữ.
+gap_fill: true
+gap_threshold_minutes: 30
+
+backfill:
+  enabled: false                   # bật sau khi phần lấy bài mới đã chạy ổn
+  until: 2026-05-08                # crawl ngược về đến ngày này (6 tháng)
+  max_pending: 200                 # số URL crawl ngược tối đa nằm chờ trong hàng đợi mỗi báo
+
+sources:
+  vnexpress:
+    domain: vnexpress.net
+    id_pattern: '-(\d+)\.html$'
+    parser: vnexpress
+    rate_limit: 1.0                # request/giây, tổng cho báo này
+    backfill_rate: 0.5             # request/giây dành cho crawl ngược
+    feeds:
+      - https://vnexpress.net/rss/tin-moi-nhat.rss
+      - https://vnexpress.net/rss/thoi-su.rss
+      - https://vnexpress.net/rss/the-gioi.rss
+      - https://vnexpress.net/rss/kinh-doanh.rss
+      - https://vnexpress.net/rss/phap-luat.rss
+      - https://vnexpress.net/rss/giao-duc.rss
+      - https://vnexpress.net/rss/suc-khoe.rss
+      - https://vnexpress.net/rss/the-thao.rss
+      - https://vnexpress.net/rss/giai-tri.rss
+      - https://vnexpress.net/rss/khoa-hoc-cong-nghe.rss
+    backfill:
+      # Sitemap theo ngày của VnExpress chuyển hướng về trang chủ, nên dùng
+      # trang lưu trữ theo ngày của từng chuyên mục.
+      method: vnexpress_day_archive
+      # Chỉ 1001005 (Thời sự) đã được kiểm tra. Các mã còn lại lấy từ trí nhớ:
+      # mở https://vnexpress.net/category/day/cateid/<mã>/fromdate/<ts>/todate/<ts>/allcate/<mã>
+      # để kiểm tra trước khi bật crawl ngược.
+      category_ids: [1001005, 1001002, 1003159, 1001007, 1003497, 1003750, 1002565, 1002691, 1001009]
+
+  tuoitre:
+    domain: tuoitre.vn
+    id_pattern: '-(\d+)\.htm$'
+    parser: tuoitre
+    rate_limit: 1.0
+    backfill_rate: 0.5
+    feeds:
+      - https://tuoitre.vn/home.rss
+      - https://tuoitre.vn/thoi-su.rss
+      - https://tuoitre.vn/the-gioi.rss
+      - https://tuoitre.vn/phap-luat.rss
+      - https://tuoitre.vn/kinh-doanh.rss
+      - https://tuoitre.vn/giao-duc.rss
+      - https://tuoitre.vn/suc-khoe.rss
+      - https://tuoitre.vn/the-thao.rss
+      - https://tuoitre.vn/giai-tri.rss
+      - https://tuoitre.vn/nhip-song-so.rss
+    backfill:
+      method: tuoitre_static_sitemap   # /StaticSitemaps/sitemaps-YYYY-M-a-b.xml, 5 ngày một file
+
+  dantri:
+    domain: dantri.com.vn
+    id_pattern: '-(\d+)\.htm$'
+    parser: dantri
+    rate_limit: 1.0
+    backfill_rate: 0.5
+    feeds:
+      - https://dantri.com.vn/rss/home.rss
+      - https://dantri.com.vn/rss/thoi-su.rss
+      - https://dantri.com.vn/rss/the-gioi.rss
+      - https://dantri.com.vn/rss/kinh-doanh.rss
+      - https://dantri.com.vn/rss/phap-luat.rss
+      - https://dantri.com.vn/rss/giao-duc.rss
+      - https://dantri.com.vn/rss/suc-khoe.rss
+      - https://dantri.com.vn/rss/the-thao.rss
+      - https://dantri.com.vn/rss/giai-tri.rss
+      - https://dantri.com.vn/rss/cong-nghe.rss
+    backfill:
+      method: dantri_monthly_sitemap   # /sitemaps/Article-YYYY-MM-01.xml

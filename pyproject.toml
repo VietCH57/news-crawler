@@ -1,0 +1,20 @@
+[project]
+name = "news-crawler"
+version = "0.1.0"
+description = "Crawler báo điện tử Việt Nam cho bài tập lớn Big Data (kiến trúc Lambda)"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.27",
+    "feedparser>=6.0",
+    "selectolax>=0.3.21",
+    "trafilatura>=1.12",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

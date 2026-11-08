@@ -1,0 +1,25 @@
+# systemd unit để chạy crawler liên tục trên server Ubuntu.
+# Sửa User và WorkingDirectory cho đúng máy, rồi:
+#   sudo cp deploy/news-crawler.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now news-crawler
+#   journalctl -u news-crawler -f
+[Unit]
+Description=news-crawler (bai tap lon Big Data)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/news-crawler
+ExecStart=/home/ubuntu/news-crawler/.venv/bin/python -m crawler run
+Restart=always
+RestartSec=30
+# Ctrl+C tương đương: cho crawler thời gian nén file đang ghi
+KillSignal=SIGINT
+TimeoutStopSec=60
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
