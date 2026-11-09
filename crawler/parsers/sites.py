@@ -11,27 +11,57 @@ import re
 
 from selectolax.lexbor import LexborHTMLParser
 
+from ..normalize import clean_text
 from ..timeutil import date_from_digits
 from .base import BaseParser, ParsedArticle
 
 
 class VnExpressParser(BaseParser):
+    """Tác giả VnExpress nằm ở đoạn căn phải cuối bài, có nhiều dạng:
+    ``<strong>Hồng Hạnh</strong> (Theo Tagesspiegel, Br)``,
+    ``<strong>Bài & ảnh:</strong> Nick M``, ``<strong>Lê Hoàng</strong>``."""
+
     name = "vnexpress"
-    version = "1"
+    version = "2"
     sapo_selectors = ["p.description"]
     content_selectors = ["article.fck_detail p.Normal"]
-    author_selectors = [
-        "article.fck_detail p.author_mail strong",
-        'article.fck_detail p[style*="right"] strong',
-        "article.fck_detail p.author strong",
+    author_selectors: list[str] = []  # xử lý riêng trong post_process
+
+    _AUTHOR_NODES = [
+        'article.fck_detail p[style*="right"]',
+        "article.fck_detail p.author_mail",
+        "article.fck_detail p.author",
     ]
+    _PREFIX = re.compile(
+        r"^(bài\s*(&|và|,)\s*ảnh|bài|ảnh|video|thực hiện|nhóm phóng viên|tin|đồ họa)\s*:\s*",
+        re.I,
+    )
+    _SOURCE = re.compile(r"\s*\(\s*(theo|tổng hợp|nguồn)\b[^)]*\)?\s*$", re.I)
+
+    @classmethod
+    def clean_author(cls, text: str) -> str:
+        t = clean_text(text)
+        t = cls._SOURCE.sub("", t)
+        t = cls._PREFIX.sub("", t)
+        return t.strip(" -–,;:")
 
     def post_process(self, art: ParsedArticle, tree: LexborHTMLParser, news: dict, url: str) -> None:
-        # Tên tác giả nằm trong đoạn p.Normal cuối cùng: bỏ khỏi nội dung.
-        if art.author and not art.used_fallback:
-            paras = art.content.split("\n\n")
-            if paras and paras[-1].strip() == art.author.strip():
-                art.content = "\n\n".join(paras[:-1])
+        node = None
+        for sel in self._AUTHOR_NODES:
+            nodes = tree.css(sel)
+            if nodes:
+                node = nodes[-1]
+                break
+        if node is None:
+            return
+        raw = clean_text(node.text(separator=" ", strip=True))
+        name = self.clean_author(raw)
+        if name and len(name) <= 80:
+            art.author = name
+        # Bỏ dòng tác giả khỏi nội dung.
+        if raw and not art.used_fallback:
+            paras = [p for p in art.content.split("\n\n") if clean_text(p) != raw]
+            art.content = "\n\n".join(paras)
 
 
 class TuoiTreParser(BaseParser):

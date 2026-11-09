@@ -62,3 +62,34 @@ def test_dantri_date_falls_back_to_id():
 def test_short_page_is_not_ok():
     a = get_parser("vnexpress").parse("<html><head><title>x</title></head><body><p>ngắn</p></body></html>", "https://vnexpress.net/x-1.html")
     assert not a.parse_ok
+
+
+def _vne_with_author(author_html: str):
+    html = fixture_text("vnexpress_article.html").replace(
+        '<p class="Normal" style="text-align:right;"><strong>Phước Tuấn</strong></p>',
+        f'<p class="Normal" style="text-align:right;">{author_html}</p>',
+    )
+    return get_parser("vnexpress").parse(html, "https://vnexpress.net/x-5142197.html")
+
+
+def test_vnexpress_author_with_source_note():
+    # Gặp thật ngày 9/11: "Hồng Hạnh (Theo Tagesspiegel, Br )" còn sót trong nội dung.
+    a = _vne_with_author("<strong>Hồng Hạnh</strong> (Theo <em>Tagesspiegel</em>, Br )")
+    assert a.author == "Hồng Hạnh"
+    assert "Tagesspiegel" not in a.content and "Hồng Hạnh" not in a.content
+
+
+def test_vnexpress_author_with_prefix():
+    # Gặp thật ngày 9/11: tác giả bị lấy thành "Bài & ảnh:".
+    a = _vne_with_author("<strong>Bài &amp; ảnh:</strong> Nick M")
+    assert a.author == "Nick M"
+    assert "Nick M" not in a.content
+
+
+def test_vnexpress_clean_author_variants():
+    from crawler.parsers.sites import VnExpressParser as P
+
+    assert P.clean_author("Ngọc Ánh (Theo AFP, AP )") == "Ngọc Ánh"
+    assert P.clean_author("Bài và ảnh: Quỳnh Trang") == "Quỳnh Trang"
+    assert P.clean_author("Lê Hoàng") == "Lê Hoàng"
+    assert P.clean_author("Như Quỳnh (Tổng hợp)") == "Như Quỳnh"
