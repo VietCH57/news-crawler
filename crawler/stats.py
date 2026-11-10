@@ -23,6 +23,7 @@ COUNTERS = (
     "parse_failed",        # parse_ok = false
     "fallback_used",       # bố cục lạ, phải dùng trafilatura
     "short_content",       # bài ảnh, video, infographic: ít chữ
+    "media_pages",         # trong số bài ít chữ: trang ảnh/video/podcast/đồ họa
     "http_4xx",
     "http_5xx",
     "network_errors",

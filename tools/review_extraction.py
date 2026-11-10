@@ -40,7 +40,10 @@ def main() -> None:
                 if s not in want or not r.get("html"):
                     continue
                 p = parsers[s].parse(r["html"], r["url"])
-                kind = p.extract_method + (" (ngắn)" if p.is_short else "") + ("" if p.parse_ok else " LỖI")
+                kind = p.extract_method
+                if p.is_short:
+                    kind += " (ngắn)" if p.media_type == "text" else f" ({p.media_type})"
+                kind += "" if p.parse_ok else " LỖI"
                 counts[s][kind] += 1
                 if summary_only or shown[s] >= 5 or (p.extract_method == "selector" and p.parse_ok and not p.is_short):
                     continue

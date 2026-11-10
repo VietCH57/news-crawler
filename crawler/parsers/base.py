@@ -25,7 +25,7 @@ except ImportError:  # pragma: no cover
 
 
 # Tăng khi đổi logic chung của trích xuất (ghép vào parser_version của bản tin).
-CORE_VERSION = "2"
+CORE_VERSION = "3"
 
 
 @dataclass
@@ -41,6 +41,9 @@ class ParsedArticle:
     # selector | selector+captions (bài ảnh/video: thêm chú thích ảnh) | trafilatura (bố cục lạ)
     extract_method: str = "selector"
     is_short: bool = False  # bài ảnh, video, infographic: chữ ít hơn min_words
+    # Chỉ xét khi bài ngắn: text | photo | video | audio | interactive.
+    # Bài dài (kể cả podcast có lời thoại) luôn là "text".
+    media_type: str = "text"
 
     @property
     def used_fallback(self) -> bool:
@@ -84,7 +87,20 @@ class BaseParser:
     # Khung chứa thân bài. Tìm thấy khung thì KHÔNG dùng trafilatura: với bài ảnh/infographic,
     # trafilatura lấy nhầm cột tin liên quan (gặp ở VietnamPlus ngày 10/11/2026).
     container_selectors: list[str] = []
-    caption_selectors: list[str] = ["figcaption", ".caption", ".PhotoCMS_Caption", ".image-caption"]
+    caption_selectors: list[str] = [
+        "figcaption", ".caption", ".PhotoCMS_Caption", ".VideoCMS_Caption", ".image-caption"
+    ]
+    # Dấu hiệu trang ảnh/video/podcast/đồ họa (khảo sát 10/11/2026). Xét theo thứ tự;
+    # chỉ dùng khi bài ít chữ, vì bài thường cũng có thể nhúng video.
+    media_markers: dict[str, list[str]] = {
+        "interactive": ['[data-component-type="widget_interactive"]', ".vne-gfx"],
+        "audio": [".content-detail-podcast", ".tab-transcript", ".wrap-content-tab-vod", "audio"],
+        "video": [
+            "body.video-page", "body.shortvideo-detail", ".video-player",
+            '[type="VideoStream"]', "video",
+        ],
+        "photo": ["body.photo-page", ".photo-detail-img"],
+    }
 
     def __init__(self, min_words: int = 50):
         self.min_words = min_words
@@ -171,8 +187,17 @@ class BaseParser:
             return True, caps
         return False, []
 
+    def detect_media(self, tree: LexborHTMLParser) -> str:
+        for kind, selectors in self.media_markers.items():
+            for sel in selectors:
+                if tree.css_first(sel) is not None:
+                    return kind
+        return "text"
+
     def parse(self, html: str, url: str) -> ParsedArticle:
         tree = LexborHTMLParser(html)
+        # Xét trước khi bỏ phần tử: Tuổi Trẻ đặt video trong khối bị bỏ.
+        media = self.detect_media(tree)
         # Lấy chú thích ảnh trước khi bỏ <figure> (cần cho bài ảnh).
         has_container, captions = self._container_and_captions(tree)
         for sel in self.drop_selectors:
@@ -218,7 +243,9 @@ class BaseParser:
                 if extra:
                     art.content = "\n\n".join(paras + extra)
                     art.extract_method = "selector+captions"
-            elif trafilatura is not None:
+            elif media == "text" and trafilatura is not None:
+                # Trang video/podcast không có khung bài: trafilatura chỉ lấy được rác
+                # (khung đánh giá, tin liên quan), nên chỉ dùng cho bố cục lạ thật sự.
                 extracted = trafilatura.extract(html, include_comments=False, include_tables=False)
                 if extracted and len(extracted.split()) > len(art.content.split()):
                     art.content = extracted.strip()
@@ -226,9 +253,13 @@ class BaseParser:
 
         self.post_process(art, tree, news, url)
         art.is_short = art.word_count < self.min_words
-        # Đạt nếu có tiêu đề và: đủ chữ, hoặc là bài ngắn nhưng lấy đúng từ khung bài.
+        art.media_type = media if art.is_short else "text"
+        # Đạt nếu có tiêu đề và: đủ chữ; hoặc bài ngắn lấy đúng từ khung bài; hoặc là trang
+        # ảnh/video/podcast/đồ họa (ít hoặc không có chữ là thật, sapo vẫn có).
         art.parse_ok = bool(art.title) and (
-            art.word_count >= self.min_words or (has_container and art.word_count > 0)
+            art.word_count >= self.min_words
+            or (has_container and art.word_count > 0)
+            or art.media_type != "text"
         )
         return art
 

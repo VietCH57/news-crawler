@@ -22,10 +22,19 @@ class VnExpressParser(BaseParser):
     ``<strong>Bài & ảnh:</strong> Nick M``, ``<strong>Lê Hoàng</strong>``."""
 
     name = "vnexpress"
-    version = "2"
+    version = "3"
     sapo_selectors = ["p.description"]
-    content_selectors = ["article.fck_detail p.Normal"]
-    container_selectors = ["article.fck_detail"]
+    # Trang podcast (tiêu đề "Nghe podcasts | ..."): lời thoại nằm ở tab "Chép lời",
+    # trang lặp khối này hai lần nên chỉ lấy khối có class content-tab.
+    content_selectors = [
+        "article.fck_detail p.Normal",
+        ".tab-cheploi.content-tab .scrolling-ctn > p",
+    ]
+    container_selectors = ["article.fck_detail", ".tab-transcript"]
+    # Podcast điểm tin không có lời thoại: lấy danh sách tin theo mốc thời gian.
+    caption_selectors = BaseParser.caption_selectors + [".time_stemp li a"]
+    _TITLE_NOISE = re.compile(r"^nghe podcasts?\s*\|\s*|\s*-\s*báo vnexpress\s*$", re.I)
+    _TIMESTAMP = re.compile(r"(?m)^\d{1,2}:\d{2}(:\d{2})?\s+")
     author_selectors: list[str] = []  # xử lý riêng trong post_process
 
     _AUTHOR_NODES = [
@@ -47,6 +56,14 @@ class VnExpressParser(BaseParser):
         return t.strip(" -–,;:")
 
     def post_process(self, art: ParsedArticle, tree: LexborHTMLParser, news: dict, url: str) -> None:
+        # Podcast: og:title có dạng "Nghe podcasts | <tiêu đề> - Báo VnExpress";
+        # đoạn đầu lời thoại lặp lại tiêu đề; mục điểm tin có mốc "00:28".
+        art.title = self._TITLE_NOISE.sub("", art.title).strip()
+        paras = art.content.split("\n\n")
+        if paras and art.title and clean_text(paras[0]) == art.title:
+            art.content = "\n\n".join(paras[1:])
+        art.content = self._TIMESTAMP.sub("", art.content)
+
         node = None
         for sel in self._AUTHOR_NODES:
             nodes = tree.css(sel)
@@ -67,7 +84,7 @@ class VnExpressParser(BaseParser):
 
 class TuoiTreParser(BaseParser):
     name = "tuoitre"
-    version = "1"
+    version = "2"
     sapo_selectors = [".detail-sapo", "h2.detail-sapo"]
     content_selectors = [".detail-content > p", ".detail-content p", ".detail-cmain p"]
     author_selectors = [".detail-author .name", ".author-info .name", ".detail-author"]
@@ -116,10 +133,11 @@ class ZceParser(BaseParser):
     ``.article__sapo``, ``.article__body.zce-content-body``, ``.article__meta``."""
 
     name = "zce"
-    version = "1"
+    version = "2"
     sapo_selectors = [".article__sapo"]
     content_selectors = [".article__body > p", ".article__body p"]
-    container_selectors = [".article__body"]
+    # Trang ảnh (body.photo-page) không có .article__body: nội dung là chú thích ảnh.
+    container_selectors = [".article__body", ".photo-detail-img"]
     author_selectors = [".article__meta .cms-author", ".article__meta .wrap-author", ".article__author"]
     drop_selectors = [".article__body figure", ".article__body table", ".article__body .box-related"]
     sapo_prefixes = ["TPO - ", "TPO-", "(TTXVN/Vietnam+) - ", "NDO - ", "NDĐT - "]

@@ -99,6 +99,7 @@ async def _parse(cfg, target: str, source: str | None) -> None:
         "parse_ok": art.parse_ok,
         "extract_method": art.extract_method,
         "is_short": art.is_short,
+        "media_type": art.media_type,
         "word_count": art.word_count,
         "title": art.title,
         "sapo": art.sapo,

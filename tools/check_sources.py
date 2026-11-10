@@ -36,7 +36,7 @@ async def check(cfg, name: str) -> None:
             return
         p = get_parser(s.parser, cfg.min_words).parse(a.text, a.final_url)
         print(
-            f"  parse_ok={p.parse_ok} extract={p.extract_method} short={p.is_short} {p.word_count} từ"
+            f"  parse_ok={p.parse_ok} extract={p.extract_method} short={p.is_short} media={p.media_type} {p.word_count} từ"
             f" | {p.published_at} | {p.author} | {p.category_raw}"
         )
         print(f"  tiêu đề: {p.title}")

@@ -401,6 +401,7 @@ class Crawler:
             "extract_method": parsed.extract_method,
             "word_count": parsed.word_count,
             "is_short": parsed.is_short,
+            "media_type": parsed.media_type,
             "parser_version": f"{parser.name}-{parser.version}/core{CORE_VERSION}",
             "html": res.text,
         }
@@ -414,6 +415,8 @@ class Crawler:
             self.stats.incr(src.name, "fallback_used")
         if parsed.is_short:
             self.stats.incr(src.name, "short_content")
+        if parsed.media_type != "text":
+            self.stats.incr(src.name, "media_pages")
 
     def _write_removed(self, task: Task, res: FetchResult) -> None:
         a = self.state.get_article(task.article_id)
@@ -441,6 +444,7 @@ class Crawler:
             "extract_method": None,
             "word_count": 0,
             "is_short": False,
+            "media_type": None,
             "parser_version": None,
             "html": None,
         }
