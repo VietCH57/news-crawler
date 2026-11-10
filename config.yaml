@@ -20,6 +20,10 @@ fsync: false                       # true = an toàn hơn khi mất điện, ch�
 gap_fill: true
 gap_threshold_minutes: 30
 
+# Báo chưa có bài nào trong State DB (mới thêm): lần đọc RSS đầu chỉ lấy bài đăng trong
+# chừng này giờ, để không tải dồn hàng trăm bài một lúc (Dân trí đã chặn IP vì việc này).
+warm_start_hours: 3
+
 backfill:
   enabled: false                   # bật sau khi phần lấy bài mới đã chạy ổn
   until: 2026-05-08                # crawl ngược về đến ngày này (6 tháng)
@@ -73,6 +77,9 @@ sources:
       method: tuoitre_static_sitemap   # /StaticSitemaps/sitemaps-YYYY-M-a-b.xml, 5 ngày một file
 
   dantri:
+    # Tắt từ 10/11/2026: Dân trí chặn IP server sau lần tải dồn đầu tiên.
+    # Khi kiểm tra thấy server kết nối lại được (curl https://dantri.com.vn/) thì bật lại.
+    enabled: false
     domain: dantri.com.vn
     id_pattern: '-(\d+)\.htm$'
     parser: dantri
@@ -92,3 +99,109 @@ sources:
       - https://dantri.com.vn/rss/cong-nghe.rss
     backfill:
       method: dantri_monthly_sitemap   # /sitemaps/Article-YYYY-MM-01.xml
+
+  # ---------- Thêm ngày 10/11/2026 (khảo sát bằng trình duyệt cùng ngày) ----------
+  # Báo mới chạy chậm hơn (0,5 request/giây) và khởi động nhẹ (warm_start_hours).
+
+  thanhnien:
+    domain: thanhnien.vn
+    id_pattern: '-(\d+)\.htm$'
+    parser: thanhnien
+    rate_limit: 0.5
+    backfill_rate: 0.25
+    feeds:
+      - https://thanhnien.vn/rss/home.rss          # 60 bài, ~2,5 giờ
+      - https://thanhnien.vn/rss/thoi-su.rss
+      - https://thanhnien.vn/rss/chinh-tri.rss
+      - https://thanhnien.vn/rss/thoi-su/phap-luat.rss
+    backfill:
+      method: fiveday_sitemap                      # cùng nền tảng với Tuổi Trẻ
+      url_template: https://thanhnien.vn/sitemaps/sitemaps-{year}-{month}-{a}-{b}.xml
+
+  vietnamnet:
+    domain: vietnamnet.vn
+    id_pattern: '-(\d+)\.html$'
+    parser: vietnamnet
+    rate_limit: 0.5
+    backfill_rate: 0.25
+    # RSS của VietnamNet chứa 1.000 bài (~1 MB mỗi lần đọc): dùng Google News sitemap
+    # (~460 bài trong 2 ngày, ~185 KB) và đọc mỗi 15 phút.
+    feed_interval_seconds: 900
+    feeds:
+      - https://vietnamnet.vn/sitemap-news.xml
+    backfill:
+      method: index_monthly_lastmod                # sitemap-article-MM-YYYY-NN.xml, lọc theo lastmod
+      index_url: https://vietnamnet.vn/sitemap.xml
+      url_template: https://vietnamnet.vn/sitemap-article-{mm}-{year}-
+
+  nhandan:
+    domain: nhandan.vn
+    id_pattern: 'post(\d+)\.html$'
+    parser: nhandan
+    rate_limit: 0.5
+    backfill_rate: 0.25
+    feeds:
+      - https://nhandan.vn/rss/home.rss            # 50 bài, ~6 giờ
+    backfill:
+      method: monthly_sitemap_lastmod
+      url_template: https://nhandan.vn/sitemaps/news-{year}-{month}.xml
+
+  vietnamplus:
+    domain: vietnamplus.vn
+    host: www.vietnamplus.vn                       # trang dùng www.
+    id_pattern: 'post(\d+)\.vnp$'
+    parser: vietnamplus
+    rate_limit: 0.5
+    backfill_rate: 0.25
+    feeds:
+      - https://www.vietnamplus.vn/rss/home.rss    # 50 bài, ~3,5 giờ
+      - https://www.vietnamplus.vn/rss/chinhtri-291.rss
+      - https://www.vietnamplus.vn/rss/thegioi-209.rss
+      - https://www.vietnamplus.vn/rss/kinhte-311.rss
+    backfill:
+      method: monthly_sitemap_lastmod
+      url_template: https://www.vietnamplus.vn/sitemaps/news-{year}-{month}.xml
+
+  tienphong:
+    domain: tienphong.vn
+    id_pattern: 'post(\d+)\.tpo$'
+    parser: tienphong
+    rate_limit: 0.5
+    backfill_rate: 0.25
+    feeds:
+      - https://tienphong.vn/rss/home.rss          # 50 bài, ~2,7 giờ
+    backfill:
+      method: monthly_sitemap_lastmod              # file tháng ~9 MB, tải một lần rồi giữ trong bộ nhớ
+      url_template: https://tienphong.vn/sitemaps/news-{year}-{month}.xml
+
+  vtcnews:
+    domain: vtcnews.vn
+    id_pattern: 'ar(\d+)\.html$'
+    parser: vtcnews
+    rate_limit: 0.5
+    backfill_rate: 0.25
+    feeds:
+      - https://vtcnews.vn/rss/tin-moi-nhat.rss    # 100 bài, ~17 giờ
+      - https://vtcnews.vn/rss/thoi-su.rss
+      - https://vtcnews.vn/rss/kinh-te.rss
+      - https://vtcnews.vn/rss/the-gioi.rss
+      - https://vtcnews.vn/rss/phap-luat.rss
+    backfill:
+      method: daily_sitemap
+      url_template: https://vtcnews.vn/sitemap-article-{year}-{mm}-{dd}.xml
+
+  laodong:
+    domain: laodong.vn
+    id_pattern: '-(\d+)\.ldo$'
+    parser: laodong
+    rate_limit: 0.5
+    backfill_rate: 0.25
+    feeds:
+      - https://laodong.vn/rss/home.rss            # 40 bài, chỉ ~1,5 giờ: đừng tắt crawler lâu
+      - https://laodong.vn/rss/thoi-su.rss
+      - https://laodong.vn/rss/the-gioi.rss
+      - https://laodong.vn/rss/xa-hoi.rss
+      - https://laodong.vn/rss/phap-luat.rss
+      - https://laodong.vn/rss/kinh-doanh.rss
+    # Sitemap của Lao Động chia theo chuyên mục, không theo ngày: chưa hỗ trợ crawl ngược
+    # và lấp khoảng trống.

@@ -111,7 +111,8 @@ class Crawler:
         t = time.monotonic()
         due = []
         for i, feed in enumerate(src.feeds):
-            interval = self.cfg.rss_interval_seconds if i == 0 else self.cfg.category_feed_interval_seconds
+            first = src.feed_interval_seconds or self.cfg.rss_interval_seconds
+            interval = first if i == 0 else self.cfg.category_feed_interval_seconds
             last = self._feed_polled.get(feed)
             if last is None or t - last >= interval - 1:
                 due.append(feed)
@@ -124,7 +125,9 @@ class Crawler:
         if not feeds:
             return
         try:
-            await rss.poll_source(src, self.fetcher, self.state, self.stats, feeds)
+            # Báo chưa có bài nào: khởi động nhẹ, chỉ lấy bài của vài giờ gần nhất.
+            warm = self.cfg.warm_start_hours if self.state.count_articles(src.name) == 0 else None
+            await rss.poll_source(src, self.fetcher, self.state, self.stats, feeds, max_age_hours=warm or None)
             t = time.monotonic()
             for f in feeds:
                 self._feed_polled[f] = t
@@ -235,7 +238,7 @@ class Crawler:
         urls = await backfill.list_day(self.fetcher, src, day)
         n = 0
         for u in urls:
-            url = normalize_url(u)
+            url = normalize_url(u, src.host)
             if self.fetcher.domain_of(url) != src.domain:
                 continue
             aid = make_article_id(src.name, url, src.id_pattern)
@@ -334,7 +337,7 @@ class Crawler:
 
     def _handle_page(self, task: Task, src: SourceConfig, res: FetchResult) -> None:
         parser = self.parsers[src.name]
-        final_url = normalize_url(res.final_url)
+        final_url = normalize_url(res.final_url, src.host)
         parsed = parser.parse(res.text, final_url)
         chash = content_hash(parsed.title, parsed.sapo, parsed.content)
         crawled_at = now_iso()

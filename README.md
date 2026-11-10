@@ -2,7 +2,22 @@
 
 Crawler báo điện tử Việt Nam cho bài tập lớn môn Lưu trữ và xử lý dữ liệu lớn: thu thập bài viết từ RSS (bài mới) và sitemap / trang lưu trữ (bài cũ), ghi ra file JSON Lines nén theo giờ, sẵn sàng nạp vào Kafka và HDFS.
 
-Giai đoạn 1 hỗ trợ 3 báo: **VnExpress, Tuổi Trẻ, Dân trí**. Không thu thập bình luận.
+Hỗ trợ 10 báo (khảo sát ngày 8 và 10/11/2026). Không thu thập bình luận.
+
+| Báo | Nguồn bài mới | Bài cũ (crawl ngược, lấp khoảng trống) | Tốc độ |
+|---|---|---|---|
+| VnExpress | RSS | Trang lưu trữ theo ngày | 1 req/s |
+| Tuổi Trẻ | RSS | Sitemap 5 ngày | 1 req/s |
+| Thanh Niên | RSS | Sitemap 5 ngày | 0,5 req/s |
+| VietnamNet | Google News sitemap (RSS nặng 1 MB) | Sitemap tháng, lọc theo lastmod | 0,5 req/s |
+| Nhân Dân | RSS | Sitemap tháng, lọc theo lastmod | 0,5 req/s |
+| VietnamPlus (TTXVN) | RSS | Sitemap tháng, lọc theo lastmod | 0,5 req/s |
+| Tiền Phong | RSS | Sitemap tháng, lọc theo lastmod | 0,5 req/s |
+| VTC News | RSS | Sitemap theo ngày | 0,5 req/s |
+| Lao Động | RSS | Chưa hỗ trợ (sitemap theo chuyên mục) | 0,5 req/s |
+| Dân trí | RSS | Sitemap tháng | **Đang tắt**: đã chặn IP server ngày 9/11/2026 |
+
+Báo mới thêm (chưa có bài nào trong `data/state/crawler.db`) được **khởi động nhẹ**: lần đọc RSS đầu chỉ lấy bài của 3 giờ gần nhất (`warm_start_hours`), không tải dồn hàng trăm bài.
 
 ## Cài đặt
 

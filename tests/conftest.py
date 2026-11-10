@@ -23,4 +23,6 @@ def cfg(tmp_path):
     c = load_config(ROOT / "config.yaml")
     c.data_dir = tmp_path / "data"
     c.retry_delays_seconds = [0, 0, 0]
+    c.warm_start_hours = 0  # trang mẫu có ngày cũ
+    c.sources["dantri"].enabled = True  # test vẫn dùng trang mẫu Dân trí
     return c

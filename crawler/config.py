@@ -14,6 +14,8 @@ import yaml
 class BackfillSourceConfig:
     method: str | None = None
     category_ids: list[int] = field(default_factory=list)
+    url_template: str | None = None  # ví dụ https://nhandan.vn/sitemaps/news-{year}-{month}.xml
+    index_url: str | None = None  # sitemap index (VietnamNet)
 
 
 @dataclass
@@ -26,6 +28,8 @@ class SourceConfig:
     rate_limit: float = 1.0
     backfill_rate: float = 0.5
     enabled: bool = True
+    host: str | None = None  # tên miền chuẩn nếu báo dùng www.
+    feed_interval_seconds: int | None = None  # ghi đè rss_interval_seconds cho feed đầu tiên
     backfill: BackfillSourceConfig = field(default_factory=BackfillSourceConfig)
 
 
@@ -48,6 +52,7 @@ class Config:
     retry_delays_seconds: list[int] = field(default_factory=lambda: [60, 300, 1800])
     gap_fill: bool = True
     gap_threshold_minutes: int = 30
+    warm_start_hours: float = 3.0
     min_words: int = 50
     fsync: bool = False
     backfill: BackfillConfig = field(default_factory=BackfillConfig)
@@ -82,9 +87,13 @@ def load_config(path: str | Path) -> Config:
             rate_limit=float(s.get("rate_limit", 1.0)),
             backfill_rate=float(s.get("backfill_rate", 0.5)),
             enabled=bool(s.get("enabled", True)),
+            host=s.get("host"),
+            feed_interval_seconds=int(s["feed_interval_seconds"]) if s.get("feed_interval_seconds") else None,
             backfill=BackfillSourceConfig(
                 method=bf.get("method"),
                 category_ids=[int(x) for x in (bf.get("category_ids") or [])],
+                url_template=bf.get("url_template"),
+                index_url=bf.get("index_url"),
             ),
         )
 
@@ -104,6 +113,7 @@ def load_config(path: str | Path) -> Config:
         retry_delays_seconds=[int(x) for x in raw.get("retry_delays_seconds", [60, 300, 1800])],
         gap_fill=bool(raw.get("gap_fill", True)),
         gap_threshold_minutes=int(raw.get("gap_threshold_minutes", 30)),
+        warm_start_hours=float(raw.get("warm_start_hours", 3)),
         min_words=int(raw.get("min_words", 50)),
         fsync=bool(raw.get("fsync", False)),
         backfill=BackfillConfig(

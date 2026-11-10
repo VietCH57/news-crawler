@@ -101,10 +101,77 @@ class DanTriParser(BaseParser):
                 art.published_at = date_from_digits(m.group(1))
 
 
+class ThanhNienParser(TuoiTreParser):
+    """Thanh Niên dùng cùng nền tảng với Tuổi Trẻ (detail-sapo, detail-content)."""
+
+    name = "thanhnien"
+    version = "1"
+    content_selectors = [".detail-content > p", ".detail-content p", ".detail-cmain p"]
+
+
+class ZceParser(BaseParser):
+    """Nền tảng chung của Nhân Dân, VietnamPlus, Tiền Phong (khảo sát 10/11/2026):
+    ``.article__sapo``, ``.article__body.zce-content-body``, ``.article__meta``."""
+
+    name = "zce"
+    version = "1"
+    sapo_selectors = [".article__sapo"]
+    content_selectors = [".article__body > p", ".article__body p"]
+    author_selectors = [".article__meta .cms-author", ".article__meta .wrap-author", ".article__author"]
+    drop_selectors = [".article__body figure", ".article__body table", ".article__body .box-related"]
+    sapo_prefixes = ["TPO - ", "TPO-", "(TTXVN/Vietnam+) - ", "NDO - ", "NDĐT - "]
+
+
+class NhanDanParser(ZceParser):
+    name = "nhandan"
+
+
+class VietnamPlusParser(ZceParser):
+    name = "vietnamplus"
+
+
+class TienPhongParser(ZceParser):
+    name = "tienphong"
+
+
+class VietnamNetParser(BaseParser):
+    """Tác giả lấy từ JSON-LD: khối tác giả trên trang có thêm chữ "Xem các bài viết của tác giả"."""
+
+    name = "vietnamnet"
+    version = "1"
+    sapo_selectors = [".content-detail-sapo"]
+    content_selectors = ["#maincontent > p", ".maincontent > p", ".maincontent p"]
+    drop_selectors = ["#maincontent figure", "#maincontent table"]
+
+
+class VtcParser(BaseParser):
+    """Sapo và tác giả lấy từ JSON-LD (selector trên trang lẫn quảng cáo)."""
+
+    name = "vtcnews"
+    version = "1"
+    content_selectors = [".edittor-content > p", ".edittor-content p"]
+    drop_selectors = [".edittor-content figure", ".edittor-content table", ".edittor-content .sponsored-banner"]
+
+
+class LaoDongParser(BaseParser):
+    name = "laodong"
+    version = "1"
+    content_selectors = ["#gallery-ctt > p", ".art-body > p", ".art-body p"]
+    author_selectors = [".art-info .authors", "span.authors"]
+    drop_selectors = [".art-body figure", ".art-body table"]
+
+
 PARSERS: dict[str, type[BaseParser]] = {
     "vnexpress": VnExpressParser,
     "tuoitre": TuoiTreParser,
     "dantri": DanTriParser,
+    "thanhnien": ThanhNienParser,
+    "nhandan": NhanDanParser,
+    "vietnamplus": VietnamPlusParser,
+    "tienphong": TienPhongParser,
+    "vietnamnet": VietnamNetParser,
+    "vtcnews": VtcParser,
+    "laodong": LaoDongParser,
 }
 
 

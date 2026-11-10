@@ -23,14 +23,21 @@ _TRACKING_KEYS = {
 }
 
 
-def normalize_url(url: str) -> str:
+def normalize_url(url: str, host: str | None = None) -> str:
     """Đưa URL về một dạng duy nhất: https, tên miền chữ thường, bỏ www.,
-    bỏ fragment và các tham số theo dõi."""
+    bỏ fragment và các tham số theo dõi.
+
+    ``host``: tên miền chuẩn của báo khi báo bắt buộc dùng ``www.``
+    (ví dụ www.vietnamplus.vn), để không phải qua một lần chuyển hướng mỗi request.
+    """
     url = url.strip()
     parts = urlsplit(url)
-    host = (parts.hostname or "").lower()
-    if host.startswith("www."):
-        host = host[4:]
+    host_in = (parts.hostname or "").lower()
+    bare = host_in[4:] if host_in.startswith("www.") else host_in
+    if host and bare == (host[4:] if host.startswith("www.") else host):
+        host = host.lower()
+    else:
+        host = bare
     port = f":{parts.port}" if parts.port and parts.port not in (80, 443) else ""
     query = [
         (k, v)
