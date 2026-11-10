@@ -25,6 +25,7 @@ class VnExpressParser(BaseParser):
     version = "2"
     sapo_selectors = ["p.description"]
     content_selectors = ["article.fck_detail p.Normal"]
+    container_selectors = ["article.fck_detail"]
     author_selectors: list[str] = []  # xử lý riêng trong post_process
 
     _AUTHOR_NODES = [
@@ -70,6 +71,7 @@ class TuoiTreParser(BaseParser):
     sapo_selectors = [".detail-sapo", "h2.detail-sapo"]
     content_selectors = [".detail-content > p", ".detail-content p", ".detail-cmain p"]
     author_selectors = [".detail-author .name", ".author-info .name", ".detail-author"]
+    container_selectors = [".detail-content", ".detail-cmain"]
     drop_selectors = [
         ".detail-content .VCSortableInPreviewMode",  # khung tin liên quan, ảnh, video
         ".detail-content figure",
@@ -117,6 +119,7 @@ class ZceParser(BaseParser):
     version = "1"
     sapo_selectors = [".article__sapo"]
     content_selectors = [".article__body > p", ".article__body p"]
+    container_selectors = [".article__body"]
     author_selectors = [".article__meta .cms-author", ".article__meta .wrap-author", ".article__author"]
     drop_selectors = [".article__body figure", ".article__body table", ".article__body .box-related"]
     sapo_prefixes = ["TPO - ", "TPO-", "(TTXVN/Vietnam+) - ", "NDO - ", "NDĐT - "]
@@ -141,6 +144,7 @@ class VietnamNetParser(BaseParser):
     version = "1"
     sapo_selectors = [".content-detail-sapo"]
     content_selectors = ["#maincontent > p", ".maincontent > p", ".maincontent p"]
+    container_selectors = ["#maincontent", ".maincontent"]
     drop_selectors = ["#maincontent figure", "#maincontent table"]
 
 
@@ -150,6 +154,7 @@ class VtcParser(BaseParser):
     name = "vtcnews"
     version = "1"
     content_selectors = [".edittor-content > p", ".edittor-content p"]
+    container_selectors = [".edittor-content"]
     drop_selectors = [".edittor-content figure", ".edittor-content table", ".edittor-content .sponsored-banner"]
 
 
@@ -157,6 +162,7 @@ class LaoDongParser(BaseParser):
     name = "laodong"
     version = "1"
     content_selectors = ["#gallery-ctt > p", ".art-body > p", ".art-body p"]
+    container_selectors = ["#gallery-ctt", ".art-body"]
     author_selectors = [".art-info .authors", "span.authors"]
     drop_selectors = [".art-body figure", ".art-body table"]
 
@@ -177,6 +183,7 @@ class VovParser(BaseParser):
     version = "1"
     sapo_selectors = [".article-summary"]
     content_selectors = [".text-long > p", ".article-content p"]
+    container_selectors = [".text-long", ".article-content"]
     drop_selectors = [".text-long figure", ".text-long table"]
     sapo_prefixes = ["VOV.VN - ", "VOV.VN -", "VOV - "]
     _SUFFIX = re.compile(r"\s*/\s*VOV(\.VN)?\s*$", re.I)

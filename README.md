@@ -77,7 +77,8 @@ data/
 └── logs/crawler.log
 ```
 
-- Mỗi dòng trong file `.jsonl.gz` là một bản tin. Các trường gồm: `article_id`, `url`, `source`, `crawl_kind`, `version_no`, `content_hash`, `is_removed`, `title`, `sapo`, `content`, `author`, `category_raw`, `tags`, `published_at`, `crawled_at`, `http_status`, `parse_ok`, `parser_version`, `html`.
+- Mỗi dòng trong file `.jsonl.gz` là một bản tin. Các trường gồm: `article_id`, `url`, `source`, `crawl_kind`, `version_no`, `content_hash`, `is_removed`, `title`, `sapo`, `content`, `author`, `category_raw`, `tags`, `published_at`, `crawled_at`, `http_status`, `parse_ok`, `extract_method`, `word_count`, `is_short`, `parser_version`, `html`.
+- `extract_method`: `selector` (bài thường), `selector+captions` (bài ảnh: thêm chú thích ảnh), `trafilatura` (bố cục lạ, cần xem lại). `is_short: true` là bài ảnh, video, infographic, có ít chữ; nên lọc riêng khi phân tích từ khóa. Ba trường này có từ ngày 10/11/2026; bản tin trước đó không có.
 - `dt`/`hour` là **giờ thu thập**, cùng cấu trúc với vùng landing trên HDFS.
 - `article_id` = SHA-1 của `báo:mã số bài`. Mã số này nằm ở cuối URL và không đổi khi báo sửa tiêu đề.
 - Mỗi bài mới được tải lại sau 1, 6 và 24 giờ. Nếu nội dung đổi, crawler ghi thêm bản tin với `version_no` tăng lên. Nếu bài bị gỡ (404/410), crawler ghi bản tin `is_removed: true`.
@@ -109,6 +110,14 @@ https://vnexpress.net/category/day/cateid/<mã>/fromdate/1778173200/todate/17782
 ## Chạy lâu dài trên Ubuntu
 
 Dùng `deploy/news-crawler.service`; hướng dẫn nằm ở đầu file. Trên Windows có thể để chạy trong Windows Terminal, và nhớ tắt chế độ ngủ khi máy đang cắm sạc.
+
+## Kiểm tra nhanh
+
+```bash
+python tools/check_sources.py sggp vov          # đọc feed + trích xuất thử một bài
+python tools/review_extraction.py --summary     # đếm bài theo cách trích xuất, trên dữ liệu đã lưu
+python tools/review_extraction.py tienphong     # liệt kê bài ảnh/video/bố cục lạ của một báo
+```
 
 ## Khi báo đổi giao diện
 

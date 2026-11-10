@@ -21,7 +21,8 @@ COUNTERS = (
     "fetched",             # số trang đã tải
     "written",             # số bản tin đã ghi
     "parse_failed",        # parse_ok = false
-    "fallback_used",       # phải dùng trafilatura
+    "fallback_used",       # bố cục lạ, phải dùng trafilatura
+    "short_content",       # bài ảnh, video, infographic: ít chữ
     "http_4xx",
     "http_5xx",
     "network_errors",

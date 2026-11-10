@@ -24,6 +24,10 @@ except ImportError:  # pragma: no cover
     trafilatura = None
 
 
+# Tăng khi đổi logic chung của trích xuất (ghép vào parser_version của bản tin).
+CORE_VERSION = "2"
+
+
 @dataclass
 class ParsedArticle:
     title: str = ""
@@ -34,7 +38,13 @@ class ParsedArticle:
     tags: list[str] = field(default_factory=list)
     published_at: str | None = None
     parse_ok: bool = False
-    used_fallback: bool = False
+    # selector | selector+captions (bài ảnh/video: thêm chú thích ảnh) | trafilatura (bố cục lạ)
+    extract_method: str = "selector"
+    is_short: bool = False  # bài ảnh, video, infographic: chữ ít hơn min_words
+
+    @property
+    def used_fallback(self) -> bool:
+        return self.extract_method == "trafilatura"
 
     @property
     def word_count(self) -> int:
@@ -71,6 +81,10 @@ class BaseParser:
     author_selectors: list[str] = []
     drop_selectors: list[str] = []  # phần tử bỏ khỏi nội dung (chú thích ảnh, quảng cáo...)
     sapo_prefixes: list[str] = []  # tiền tố bỏ khỏi sapo, ví dụ "(Dân trí) - "
+    # Khung chứa thân bài. Tìm thấy khung thì KHÔNG dùng trafilatura: với bài ảnh/infographic,
+    # trafilatura lấy nhầm cột tin liên quan (gặp ở VietnamPlus ngày 10/11/2026).
+    container_selectors: list[str] = []
+    caption_selectors: list[str] = ["figcaption", ".caption", ".PhotoCMS_Caption", ".image-caption"]
 
     def __init__(self, min_words: int = 50):
         self.min_words = min_words
@@ -143,8 +157,24 @@ class BaseParser:
         return [p for p in paras if p]
 
     # ---------- trích xuất ----------
+    def _container_and_captions(self, tree: LexborHTMLParser) -> tuple[bool, list[str]]:
+        for sel in self.container_selectors:
+            box = tree.css_first(sel)
+            if box is None:
+                continue
+            caps: list[str] = []
+            for csel in self.caption_selectors:
+                for node in box.css(csel):
+                    t = clean_text(node.text(separator=" ", strip=True))
+                    if t and t not in caps:
+                        caps.append(t)
+            return True, caps
+        return False, []
+
     def parse(self, html: str, url: str) -> ParsedArticle:
         tree = LexborHTMLParser(html)
+        # Lấy chú thích ảnh trước khi bỏ <figure> (cần cho bài ảnh).
+        has_container, captions = self._container_and_captions(tree)
         for sel in self.drop_selectors:
             for node in tree.css(sel):
                 node.decompose()
@@ -181,14 +211,25 @@ class BaseParser:
 
         paras = self.paragraphs(tree)
         art.content = "\n\n".join(paras)
-        if len(art.content.split()) < self.min_words and trafilatura is not None:
-            extracted = trafilatura.extract(html, include_comments=False, include_tables=False)
-            if extracted and len(extracted.split()) > len(art.content.split()):
-                art.content = extracted.strip()
-                art.used_fallback = True
+        if len(art.content.split()) < self.min_words:
+            if has_container:
+                # Bài ảnh/video/infographic: ít chữ là thật, bổ sung chú thích ảnh.
+                extra = [c for c in captions if c not in art.content]
+                if extra:
+                    art.content = "\n\n".join(paras + extra)
+                    art.extract_method = "selector+captions"
+            elif trafilatura is not None:
+                extracted = trafilatura.extract(html, include_comments=False, include_tables=False)
+                if extracted and len(extracted.split()) > len(art.content.split()):
+                    art.content = extracted.strip()
+                    art.extract_method = "trafilatura"
 
         self.post_process(art, tree, news, url)
-        art.parse_ok = bool(art.title) and art.word_count >= self.min_words
+        art.is_short = art.word_count < self.min_words
+        # Đạt nếu có tiêu đề và: đủ chữ, hoặc là bài ngắn nhưng lấy đúng từ khung bài.
+        art.parse_ok = bool(art.title) and (
+            art.word_count >= self.min_words or (has_container and art.word_count > 0)
+        )
         return art
 
     def post_process(self, art: ParsedArticle, tree: LexborHTMLParser, news: dict, url: str) -> None:

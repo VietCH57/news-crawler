@@ -16,6 +16,7 @@ from .discover import backfill, rss
 from .fetcher import PAUSED, Fetcher, FetchResult
 from .normalize import content_hash, make_article_id, normalize_url
 from .parsers import get_parser
+from .parsers.base import CORE_VERSION
 from .sinks import FileSink, Sink
 from .state import State, Task
 from .stats import Stats
@@ -118,6 +119,18 @@ class Crawler:
                 due.append(feed)
         return due
 
+    def _since(self, src: SourceConfig) -> str | None:
+        """Khởi động nhẹ: báo chưa có bài nào thì chốt mốc "chỉ lấy bài đăng từ N giờ trước
+        thời điểm bật". Mốc lưu trong State DB và áp dụng mãi về sau (bài cũ hơn để cho
+        crawl ngược), không chỉ cho lần đọc RSS đầu tiên."""
+        key = f"since:{src.name}"
+        since = self.state.get(key)
+        if since is None and self.cfg.warm_start_hours and self.state.count_articles(src.name) == 0:
+            since = to_iso(now() - timedelta(hours=self.cfg.warm_start_hours))
+            self.state.set(key, since)
+            log.info("[%s] Báo mới: chỉ lấy bài đăng từ %s", src.name, since)
+        return since
+
     async def _poll(self, src: SourceConfig, all_feeds: bool = False) -> None:
         if self.fetcher.paused_for(src.domain) > 0:
             return
@@ -125,9 +138,7 @@ class Crawler:
         if not feeds:
             return
         try:
-            # Báo chưa có bài nào: khởi động nhẹ, chỉ lấy bài của vài giờ gần nhất.
-            warm = self.cfg.warm_start_hours if self.state.count_articles(src.name) == 0 else None
-            await rss.poll_source(src, self.fetcher, self.state, self.stats, feeds, max_age_hours=warm or None)
+            await rss.poll_source(src, self.fetcher, self.state, self.stats, feeds, since=self._since(src))
             t = time.monotonic()
             for f in feeds:
                 self._feed_polled[f] = t
@@ -387,7 +398,10 @@ class Crawler:
             "crawled_at": crawled_at,
             "http_status": res.status,
             "parse_ok": parsed.parse_ok,
-            "parser_version": f"{parser.name}-{parser.version}",
+            "extract_method": parsed.extract_method,
+            "word_count": parsed.word_count,
+            "is_short": parsed.is_short,
+            "parser_version": f"{parser.name}-{parser.version}/core{CORE_VERSION}",
             "html": res.text,
         }
         # Ghi file trước, cập nhật State DB sau: sập giữa chừng thì có thể trùng, không mất.
@@ -398,6 +412,8 @@ class Crawler:
             log.warning("[%s] Trích xuất chưa đạt (%d từ): %s", src.name, parsed.word_count, final_url)
         if parsed.used_fallback:
             self.stats.incr(src.name, "fallback_used")
+        if parsed.is_short:
+            self.stats.incr(src.name, "short_content")
 
     def _write_removed(self, task: Task, res: FetchResult) -> None:
         a = self.state.get_article(task.article_id)
@@ -422,6 +438,9 @@ class Crawler:
             "crawled_at": crawled_at,
             "http_status": res.status,
             "parse_ok": False,
+            "extract_method": None,
+            "word_count": 0,
+            "is_short": False,
             "parser_version": None,
             "html": None,
         }

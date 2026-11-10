@@ -109,7 +109,7 @@ def test_warm_start_skips_old_items(cfg, tmp_path):
         f = Fetcher(cfg.user_agent, 5, {src.domain: 1000}, {}, transport=httpx.MockTransport(handler))
         st = State(tmp_path / "s.db")
         try:
-            n = await poll_source(src, f, st, Stats(tmp_path), [src.feeds[0]], max_age_hours=3)
+            n = await poll_source(src, f, st, Stats(tmp_path), [src.feeds[0]], since=to_iso(now() - timedelta(hours=3)))
             return n, st.pending_count("vtcnews")
         finally:
             await f.close()
@@ -215,3 +215,66 @@ def test_crawl_delay_and_subdomain_share_limits(cfg):
     rate, brate, same_lim, same_health = asyncio.run(go())
     assert rate == brate == 1 / 20
     assert same_lim and same_health
+
+
+_RELATED = "".join(
+    f"<p>Tin liên quan số {i}: một bài khác hoàn toàn về chủ đề khác, có rất nhiều chữ để làm nhiễu.</p>" for i in range(60)
+)
+
+
+def _zce_media_page(body_inner: str) -> str:
+    return (
+        '<html><head><meta property="og:title" content="Bài ảnh Tổng Bí thư tiếp khách"/>'
+        '<meta property="article:published_time" content="2026-11-10T11:00:00+07:00"/></head>'
+        '<body><div class="site-body"><div class="container"><div class="article">'
+        '<div class="article__sapo cms-desc">Sáng 10/11, tại Tokyo, Tổng Bí thư tiếp các nguyên Thủ tướng.</div>'
+        f'<div class="article__body zce-content-body">{body_inner}</div></div>'
+        f'<div class="timeline secondary">{_RELATED}</div></div></div></body></html>'
+    )
+
+
+def test_photo_story_uses_captions_not_related_news():
+    # Mô phỏng bài ảnh VietnamPlus post1147335: thân bài chỉ có ảnh + chú thích.
+    body = "".join(
+        f"<figure><img src='a{i}.jpg'/><figcaption>Chú thích ảnh {i}: Tổng Bí thư bắt tay khách tại buổi tiếp.</figcaption></figure>"
+        for i in range(4)
+    )
+    a = get_parser("vietnamplus").parse(_zce_media_page(body), "https://www.vietnamplus.vn/x-post1147335.vnp")
+    assert a.extract_method == "selector+captions"
+    assert "Chú thích ảnh 0" in a.content and "Tin liên quan" not in a.content
+    assert a.parse_ok
+
+
+def test_infographic_short_but_ok_without_trafilatura():
+    # Mô phỏng infographic VietnamPlus post1147358: 1 đoạn chữ ngắn, bên cạnh là dòng tin liên quan.
+    body = "<figure><img src='info.jpg'/></figure><p>Infographic: 5 lưu ý giúp bảo vệ sức khỏe khi trời trở lạnh.</p>"
+    a = get_parser("vietnamplus").parse(_zce_media_page(body), "https://www.vietnamplus.vn/x-post1147358.vnp")
+    assert a.extract_method == "selector"
+    assert a.is_short and a.parse_ok
+    assert "Tin liên quan" not in a.content
+
+
+def test_unknown_layout_still_falls_back_to_trafilatura():
+    html = "<html><head><title>Bố cục lạ</title><meta property='og:title' content='Bố cục lạ'/></head><body><main><article>" + "".join(
+        f"<p>Đoạn {i}: đây là một đoạn văn dài của bài báo có bố cục hoàn toàn mới mà parser chưa biết tới, cần trích xuất dự phòng.</p>" for i in range(8)
+    ) + "</article></main></body></html>"
+    a = get_parser("vietnamplus").parse(html, "https://www.vietnamplus.vn/x-post1.vnp")
+    assert a.extract_method == "trafilatura" and a.parse_ok
+
+
+def test_warm_start_cutoff_persists(cfg):
+    from crawler.app import Crawler
+
+    c = Crawler(cfg, transport=httpx.MockTransport(lambda r: httpx.Response(404)))
+    try:
+        cfg.warm_start_hours = 3
+        first = c._since(c.sources["vov"])
+        assert first is not None
+        # Sau khi đã có bài, mốc vẫn giữ nguyên (bản cũ mất tác dụng ngay lần đọc thứ hai).
+        c.state.add_article("x", "vov", "u", "h", to_iso(now()), None)
+        assert c._since(c.sources["vov"]) == first
+        # Báo đã chạy từ trước (có bài, chưa có mốc): không lọc.
+        c.state.add_article("y", "vnexpress", "u2", "h", to_iso(now()), None)
+        assert c._since(c.sources["vnexpress"]) is None
+    finally:
+        asyncio.run(c.close())

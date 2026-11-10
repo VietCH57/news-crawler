@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import timedelta
 
 import feedparser
 
@@ -13,7 +12,7 @@ from ..fetcher import Fetcher
 from ..normalize import make_article_id, normalize_url
 from ..state import State
 from ..stats import Stats
-from ..timeutil import from_iso, now, parse_date
+from ..timeutil import from_iso, parse_date
 
 log = logging.getLogger(__name__)
 
@@ -74,16 +73,16 @@ async def poll_source(
     state: State,
     stats: Stats,
     feeds: list[str] | None = None,
-    max_age_hours: float | None = None,
+    since: str | None = None,
 ) -> int:
     """Đọc các feed của một báo, đưa URL chưa thấy vào hàng đợi. Trả về số URL mới.
 
-    ``max_age_hours``: bỏ qua bài đăng cũ hơn mốc này. Dùng cho lần chạy đầu của một
-    báo mới, để không tải dồn hàng trăm bài một lúc (bài học từ lần Dân trí chặn IP).
+    ``since``: bỏ qua bài đăng trước mốc này (ISO). Dùng cho báo mới thêm, để không tải
+    dồn hàng trăm bài một lúc (bài học từ lần Dân trí chặn IP).
     """
     new = 0
     skipped_old = 0
-    cutoff = now() - timedelta(hours=max_age_hours) if max_age_hours else None
+    cutoff = from_iso(since) if since else None
     for feed_url in feeds if feeds is not None else src.feeds:
         if fetcher.paused_for(src.domain) > 0:
             break
@@ -114,6 +113,6 @@ async def poll_source(
         stats.incr(src.name, "discovered", new)
         log.info("[%s] %d bài mới từ RSS", src.name, new)
     if skipped_old:
-        log.info("[%s] Khởi động nhẹ: bỏ qua %d mục cũ hơn %.0f giờ", src.name, skipped_old, max_age_hours)
+        log.debug("[%s] Khởi động nhẹ: bỏ qua %d mục đăng trước %s", src.name, skipped_old, since)
     state.set(f"rss_ok:{src.name}", True)
     return new
