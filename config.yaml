@@ -191,6 +191,9 @@ sources:
       url_template: https://vtcnews.vn/sitemap-article-{year}-{mm}-{dd}.xml
 
   laodong:
+    # Tắt từ 10/11/2026: từ server, RSS chỉ trả về 177 byte (trình duyệt nhận 60 KB),
+    # nghi là trang chống bot. Không vượt qua; bật lại nếu server nhận được RSS đầy đủ.
+    enabled: false
     domain: laodong.vn
     id_pattern: '-(\d+)\.ldo$'
     parser: laodong
@@ -205,3 +208,31 @@ sources:
       - https://laodong.vn/rss/kinh-doanh.rss
     # Sitemap của Lao Động chia theo chuyên mục, không theo ngày: chưa hỗ trợ crawl ngược
     # và lấp khoảng trống.
+
+  sggp:
+    domain: sggp.org.vn
+    host: www.sggp.org.vn                          # trang dùng www.; một số bài chuyển sang thethao.sggp.org.vn
+    id_pattern: 'post(\d+)\.html$'
+    parser: sggp
+    rate_limit: 0.5
+    backfill_rate: 0.25
+    feeds:
+      - https://www.sggp.org.vn/rss/home.rss       # 50 bài, ~5 giờ
+      - https://www.sggp.org.vn/rss/chinh-tri-24.rss
+      - https://www.sggp.org.vn/rss/xa-hoi-199.rss
+    backfill:
+      method: monthly_sitemap_lastmod              # nền tảng như Nhân Dân
+      url_template: https://www.sggp.org.vn/sitemaps/news-{year}-{month}.xml
+
+  vov:
+    domain: vov.vn
+    id_pattern: 'post(\d+)\.vov$'
+    parser: vov
+    # robots.txt của VOV yêu cầu Crawl-delay: 20 (mỗi request cách nhau 20 giây);
+    # crawler tự áp dụng khi đọc robots.txt, đặt sẵn ở đây cho rõ.
+    rate_limit: 0.05
+    backfill_rate: 0.05
+    feed_interval_seconds: 900                     # RSS ~400 KB cho 30 bài (~2 giờ): đọc mỗi 15 phút
+    feeds:
+      - https://vov.vn/rss.xml
+    # Sitemap của VOV không chia theo ngày: chưa hỗ trợ crawl ngược và lấp khoảng trống.

@@ -46,9 +46,10 @@ def parse_date(value: str | None) -> str | None:
     if not s:
         return None
 
-    # ISO 8601
+    # ISO 8601 (SGGP viết múi giờ "+0700" không có dấu hai chấm)
     try:
         iso = s.replace("Z", "+00:00") if s.endswith("Z") else s
+        iso = re.sub(r"T(.*)([+-]\d{2})(\d{2})$", r"T\1\2:\3", iso)
         dt = datetime.fromisoformat(iso)
         return to_iso(dt)
     except ValueError:

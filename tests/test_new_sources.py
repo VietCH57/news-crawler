@@ -167,3 +167,51 @@ def test_monthly_and_index_listers_filter_by_lastmod(cfg):
 def test_parse_sitemap_entries():
     xml = _sm(("https://a.vn/x-1.htm", "2026-05-08T10:00:00+07:00"))
     assert parse_sitemap_entries(xml) == [("https://a.vn/x-1.htm", "2026-05-08T10:00:00+07:00")]
+
+
+def test_vov_parser():
+    a = get_parser("vov").parse(fixture_text("vov_article.html"), "https://vov.vn/phap-luat/x-post1348841.vov")
+    assert a.parse_ok
+    assert a.author == "Trọng Phú"  # bỏ "/VOV.VN"
+    assert a.sapo.startswith("Ngày 10/11")  # bỏ "VOV.VN - "
+    assert "Ảnh:" not in a.content
+
+
+def test_sggp_parser_author_from_jsonld_and_plus0700():
+    a = get_parser("sggp").parse(fixture_text("sggp_article.html"), "https://www.sggp.org.vn/x-post880993.html")
+    assert a.parse_ok
+    assert a.author == "ĐỖ HOÀNG"  # không lấy "SGGPO" trên trang
+    assert a.published_at == "2026-11-10T13:14:10+07:00"
+
+
+def test_parse_date_plus0700():
+    from crawler.timeutil import parse_date
+
+    assert parse_date("2026-11-10T13:14:10+0700") == "2026-11-10T13:14:10+07:00"
+    assert parse_date("2026-11-10T13:14:10-0130") == "2026-11-10T21:44:10+07:00"
+
+
+def test_crawl_delay_and_subdomain_share_limits(cfg):
+    from crawler.fetcher import Fetcher
+
+    def handler(request):
+        if request.url.path == "/robots.txt":
+            return httpx.Response(200, text="User-agent: *\nCrawl-delay: 20\nAllow: /\n")
+        return httpx.Response(200, text="ok")
+
+    async def go():
+        f = Fetcher(cfg.user_agent, 5, {"vov.vn": 1.0, "sggp.org.vn": 0.5}, {"vov.vn": 1.0}, transport=httpx.MockTransport(handler))
+        try:
+            await f.allowed("https://vov.vn/x-post1.vov")
+            return (
+                f._limiter("vov.vn").base_rate,
+                f.backfill_limiters["vov.vn"].base_rate,
+                f._limiter("thethao.sggp.org.vn") is f._limiter("sggp.org.vn"),
+                f.health("thethao.sggp.org.vn") is f.health("sggp.org.vn"),
+            )
+        finally:
+            await f.close()
+
+    rate, brate, same_lim, same_health = asyncio.run(go())
+    assert rate == brate == 1 / 20
+    assert same_lim and same_health

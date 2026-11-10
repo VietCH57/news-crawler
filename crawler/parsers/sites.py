@@ -161,7 +161,34 @@ class LaoDongParser(BaseParser):
     drop_selectors = [".art-body figure", ".art-body table"]
 
 
+class SggpParser(ZceParser):
+    """Sài Gòn Giải Phóng: nền tảng như Nhân Dân. Ô tác giả trên trang ghi nguồn ("SGGPO"),
+    nên tác giả lấy từ JSON-LD."""
+
+    name = "sggp"
+    author_selectors: list[str] = []
+    sapo_prefixes = ["SGGPO - ", "SGGP - "]
+
+
+class VovParser(BaseParser):
+    """VOV: tác giả dạng "Trọng Phú/VOV.VN", sapo bắt đầu bằng "VOV.VN - "."""
+
+    name = "vov"
+    version = "1"
+    sapo_selectors = [".article-summary"]
+    content_selectors = [".text-long > p", ".article-content p"]
+    drop_selectors = [".text-long figure", ".text-long table"]
+    sapo_prefixes = ["VOV.VN - ", "VOV.VN -", "VOV - "]
+    _SUFFIX = re.compile(r"\s*/\s*VOV(\.VN)?\s*$", re.I)
+
+    def post_process(self, art: ParsedArticle, tree: LexborHTMLParser, news: dict, url: str) -> None:
+        if art.author:
+            art.author = self._SUFFIX.sub("", art.author).strip() or art.author
+
+
 PARSERS: dict[str, type[BaseParser]] = {
+    "sggp": SggpParser,
+    "vov": VovParser,
     "vnexpress": VnExpressParser,
     "tuoitre": TuoiTreParser,
     "dantri": DanTriParser,

@@ -93,10 +93,34 @@ class Fetcher:
         host = (urlsplit(url).hostname or "").lower()
         return host[4:] if host.startswith("www.") else host
 
+    def _key(self, domain: str) -> str:
+        """Tên miền con (thethao.sggp.org.vn) dùng chung giới hạn với tên miền đã cấu hình."""
+        if domain in self.limiters:
+            return domain
+        for d in self.limiters:
+            if domain.endswith("." + d):
+                return d
+        return domain
+
     def _limiter(self, domain: str) -> RateLimiter:
+        domain = self._key(domain)
         if domain not in self.limiters:
             self.limiters[domain] = RateLimiter(1.0)
         return self.limiters[domain]
+
+    def _apply_crawl_delay(self, domain: str, parser: RobotFileParser) -> None:
+        try:
+            delay = parser.crawl_delay(self.robots_agent)
+        except Exception:  # noqa: BLE001
+            delay = None
+        if not delay:
+            return
+        cap = 1.0 / float(delay)
+        for limiters in (self.limiters, self.backfill_limiters):
+            lim = limiters.get(self._key(domain))
+            if lim and lim.base_rate > cap:
+                lim.base_rate = lim.rate = cap
+        log.info("[%s] robots.txt yêu cầu Crawl-delay %ss: giới hạn %.3f request/giây", domain, delay, cap)
 
     async def _robots_for(self, domain: str) -> RobotFileParser | None:
         async with self._robots_lock:
@@ -110,6 +134,7 @@ class Fetcher:
                 if r.status_code == 200:
                     parser = RobotFileParser()
                     parser.parse(r.text.splitlines())
+                    self._apply_crawl_delay(domain, parser)
                 elif 400 <= r.status_code < 500:
                     parser = None  # không có robots.txt: được phép
                 else:
@@ -125,10 +150,11 @@ class Fetcher:
             return parser
 
     async def allowed(self, url: str) -> bool:
-        parser = await self._robots_for(self.domain_of(url))
+        parser = await self._robots_for(self.domain_of(url))  # robots.txt của chính tên miền đó
         return True if parser is None else parser.can_fetch(self.robots_agent, url)
 
     def health(self, domain: str) -> "DomainHealth":
+        domain = self._key(domain)
         if domain not in self.healths:
             self.healths[domain] = DomainHealth(domain)
         return self.healths[domain]
@@ -144,8 +170,9 @@ class Fetcher:
             return FetchResult(url, url, 0, "", error=PAUSED)
         if not await self.allowed(url):
             return FetchResult(url, url, 0, "", error="robots.txt không cho phép")
-        if backfill and domain in self.backfill_limiters:
-            await self.backfill_limiters[domain].wait()
+        bkey = self._key(domain)
+        if backfill and bkey in self.backfill_limiters:
+            await self.backfill_limiters[bkey].wait()
         limiter = self._limiter(domain)
         await limiter.wait()
         t0 = time.monotonic()
@@ -158,8 +185,8 @@ class Fetcher:
         elapsed = time.monotonic() - t0
         if r.status_code == 429:
             limiter.slow_down()
-            if backfill and domain in self.backfill_limiters:
-                self.backfill_limiters[domain].slow_down()
+            if backfill and bkey in self.backfill_limiters:
+                self.backfill_limiters[bkey].slow_down()
         return FetchResult(url, str(r.url), r.status_code, r.text, elapsed=elapsed)
 
 
