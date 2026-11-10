@@ -160,8 +160,8 @@ class VietnamNetParser(BaseParser):
     """Tác giả lấy từ JSON-LD: khối tác giả trên trang có thêm chữ "Xem các bài viết của tác giả"."""
 
     name = "vietnamnet"
-    version = "1"
-    sapo_selectors = [".content-detail-sapo"]
+    version = "2"
+    sapo_selectors = [".content-detail-sapo", ".video-detail__sabo"]  # "sabo": đúng tên class của báo
     content_selectors = ["#maincontent > p", ".maincontent > p", ".maincontent p"]
     container_selectors = ["#maincontent", ".maincontent"]
     drop_selectors = ["#maincontent figure", "#maincontent table"]

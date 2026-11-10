@@ -194,3 +194,21 @@ def test_vov_video_summary():
     )
     a = get_parser("vov").parse(_page("Tin bóng đá 10-11", page), "https://vov.vn/x-post1348927.vov")
     assert a.content.startswith("Dàn cầu thủ") and a.media_type == "video" and a.extract_method == "selector"
+
+
+def test_dedicated_video_pages_never_use_trafilatura():
+    # Trang video riêng: trafilatura từng lấy "Phím tắt điều khiển" (VnExpress),
+    # chân trang (VietnamNet), tin Shorts khác (SGGP).
+    junk = "".join(f"<p>Phím tắt điều khiển số {i}: tua video đi ba giây, mở thảo luận, tắt mở âm.</p>" for i in range(8))
+    cases = [
+        ("vnexpress", "page-short", "https://vnexpress.net/x-5142890.html", ""),
+        ("vietnamnet", "wrapper-page-video", "https://vietnamnet.vn/x-2572993.html",
+         '<div class="video-detail"><div class="video-detail__media"></div>'
+         '<div class="video-detail__sabo"><p>CHILE – Đoạn video ghi lại sự việc hy hữu.</p></div></div>'),
+        ("sggp", "", "https://www.sggp.org.vn/x-post881009.html", '<div class="box-short-video-detail"></div>'),
+    ]
+    for source, body_cls, url, body in cases:
+        a = get_parser(source).parse(_page("Video", body + f"<main><article>{junk}</article></main>", body_cls), url)
+        assert a.extract_method != "trafilatura", source
+        assert a.media_type == "video" and a.parse_ok, source
+    assert a.sapo  # SGGP: sapo lấy từ og:description

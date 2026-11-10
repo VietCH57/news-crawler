@@ -97,7 +97,10 @@ class BaseParser:
         "interactive": ['[data-component-type="widget_interactive"]', ".vne-gfx"],
         "audio": [".content-detail-podcast", ".tab-transcript", ".wrap-content-tab-vod", "audio"],
         "video": [
-            "body.video-page", "body.shortvideo-detail", ".video-player", ".detail_shortvideo",
+            # Trang video riêng: VnExpress (page-short), VietnamNet, Tiền Phong, SGGP Shorts.
+            "body.page-short", "body.wrapper-page-video", ".video-detail__media",
+            "body.video-page", "body.shortvideo-detail", ".video-player",
+            ".detail_shortvideo", ".box-short-video-detail", ".short-video-slider",
             ".nd-detail-video", "b.video-element", ".video__summary",
             '[type="VideoStream"]', 'iframe[src*="youtube.com/embed"]', "video",
         ],
