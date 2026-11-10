@@ -6,7 +6,8 @@ user_agent: "news-crawler/0.1 (+https://github.com/VietCH57/news-crawler; studen
 
 data_dir: data
 
-rss_interval_seconds: 300          # đọc RSS mỗi 5 phút
+rss_interval_seconds: 300          # feed đầu tiên (tin mới nhất) của mỗi báo: đọc mỗi 5 phút
+category_feed_interval_seconds: 1800  # các feed chuyên mục: chỉ là lưới an toàn, đọc mỗi 30 phút
 recheck_after_hours: [1, 6, 24]    # tải lại bài sau 1, 6, 24 giờ để phát hiện sửa/gỡ
 request_timeout: 20
 max_retries: 3
@@ -75,8 +76,9 @@ sources:
     domain: dantri.com.vn
     id_pattern: '-(\d+)\.htm$'
     parser: dantri
-    rate_limit: 1.0
-    backfill_rate: 0.5
+    # 10/11/2026: không kết nối được tới Dân trí cả buổi sáng (nghi bị chặn IP). Giảm tốc cho an toàn.
+    rate_limit: 0.5
+    backfill_rate: 0.25
     feeds:
       - https://dantri.com.vn/rss/home.rss
       - https://dantri.com.vn/rss/thoi-su.rss

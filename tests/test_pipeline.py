@@ -183,3 +183,74 @@ def test_run_loop_with_gap_and_backfill(cfg):
     assert stats["gaps"], "phải ghi nhận khoảng trống"
     # Trang lưu trữ VnExpress đã được đọc.
     assert any("/category/day/cateid/1001005/" in h for h in web.hits)
+
+
+def test_domain_pause_keeps_tasks_and_recovers(cfg):
+    """Dân trí không kết nối được: tạm dừng thay vì đốt hết lượt thử; kết nối lại thì
+    đưa việc thất bại về hàng đợi và lên lịch lấp khoảng trống."""
+    _fast(cfg)
+    web = FakeWeb()
+    down = {"dantri.com.vn": True}
+
+    def handler(request):
+        if down.get(request.url.host):
+            raise httpx.ConnectTimeout("timeout", request=request)
+        return web.handler(request)
+
+    async def go():
+        c = Crawler(cfg, transport=httpx.MockTransport(handler))
+        try:
+            st = c.state
+            h = c.fetcher.health("dantri.com.vn")
+            # Một bài Dân trí đang chờ trong hàng đợi.
+            from crawler.normalize import make_article_id
+
+            aid = make_article_id("dantri", DT_NEW, r"-(\d+)\.htm$")
+            st.enqueue(aid, DT_NEW, "dantri", "rss")
+            # 5 lần lỗi liên tiếp -> tạm dừng.
+            for _ in range(5):
+                await c.fetcher.fetch("https://dantri.com.vn/rss/home.rss")
+            assert c.fetcher.paused_for("dantri.com.vn") > 0
+            hits_before = len(web.hits)
+            task = st.claim("dantri")
+            await c.process(task)  # đang tạm dừng: không gửi request, không tính lượt thử
+            assert len(web.hits) == hits_before
+            row = st.db.execute("SELECT status, attempts FROM frontier WHERE article_id=?", (aid,)).fetchone()
+            assert tuple(row) == ("pending", 0)
+            # Một việc khác đã thất bại vì lỗi mạng trước đó.
+            st.enqueue("x" * 40, "https://dantri.com.vn/a-20261110000000000.htm", "dantri", "rss")
+            t2 = st.claim("dantri", kinds=("rss",), at=now() + timedelta(days=1))
+            st.fail(t2.id, "ConnectTimeout: timeout")
+            # Trang hoạt động lại sau 2 giờ.
+            down["dantri.com.vn"] = False
+            h.paused_until = 0
+            h.down_since -= 2 * 3600
+            res = await c.fetcher.fetch("https://dantri.com.vn/rss/home.rss")
+            assert res.ok and h.recovered_after >= 2 * 3600
+            c._check_recoveries()
+            failed = st.db.execute("SELECT COUNT(*) FROM frontier WHERE status='failed'").fetchone()[0]
+            assert failed == 0
+            assert st.get("gap_days:dantri")
+        finally:
+            await c.close()
+
+    asyncio.run(go())
+    stats = json.loads(next((cfg.data_dir / "stats").glob("*.json")).read_text(encoding="utf-8"))
+    assert any(g.get("source") == "dantri" for g in stats["gaps"])
+
+
+def test_category_feeds_polled_less_often(cfg):
+    _fast(cfg)
+    for s in cfg.sources.values():
+        s.feeds = [s.feeds[0], s.feeds[0] + "?cat=1", s.feeds[0] + "?cat=2"]
+    c = Crawler(cfg, transport=httpx.MockTransport(FakeWeb().handler))
+    try:
+        src = c.sources["vnexpress"]
+        assert len(c._feeds_due(src)) == 3  # lần đầu: đọc hết
+        import time as _t
+
+        for f in src.feeds:
+            c._feed_polled[f] = _t.monotonic() - cfg.rss_interval_seconds
+        assert c._feeds_due(src) == [src.feeds[0]]  # 5 phút sau: chỉ feed tin mới
+    finally:
+        asyncio.run(c.close())

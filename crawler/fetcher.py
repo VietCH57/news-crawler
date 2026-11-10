@@ -81,6 +81,7 @@ class Fetcher:
         )
         self.limiters = {d: RateLimiter(r) for d, r in rates.items()}
         self.backfill_limiters = {d: RateLimiter(r) for d, r in backfill_rates.items()}
+        self.healths: dict[str, DomainHealth] = {}
         self._robots: dict[str, tuple[float, RobotFileParser | None]] = {}
         self._robots_lock = asyncio.Lock()
 
@@ -115,6 +116,8 @@ class Fetcher:
                     raise httpx.HTTPStatusError("robots", request=r.request, response=r)
             except Exception as e:  # noqa: BLE001
                 log.warning("Không đọc được robots.txt của %s: %s", domain, e)
+                if isinstance(e, httpx.TransportError):
+                    self.health(domain).failure()
                 # Lỗi tạm thời: thử lại sau 10 phút, trong lúc đó coi như được phép.
                 self._robots[domain] = (time.monotonic() - ROBOTS_TTL_SECONDS + 600, None)
                 return None
@@ -125,8 +128,20 @@ class Fetcher:
         parser = await self._robots_for(self.domain_of(url))
         return True if parser is None else parser.can_fetch(self.robots_agent, url)
 
+    def health(self, domain: str) -> "DomainHealth":
+        if domain not in self.healths:
+            self.healths[domain] = DomainHealth(domain)
+        return self.healths[domain]
+
+    def paused_for(self, domain: str) -> float:
+        """Số giây còn lại trước khi được gửi request tới báo này (0 = không tạm dừng)."""
+        return self.health(domain).remaining()
+
     async def fetch(self, url: str, backfill: bool = False) -> FetchResult:
         domain = self.domain_of(url)
+        health = self.health(domain)
+        if health.remaining() > 0:
+            return FetchResult(url, url, 0, "", error=PAUSED)
         if not await self.allowed(url):
             return FetchResult(url, url, 0, "", error="robots.txt không cho phép")
         if backfill and domain in self.backfill_limiters:
@@ -137,10 +152,62 @@ class Fetcher:
         try:
             r = await self.client.get(url)
         except httpx.HTTPError as e:
+            health.failure()
             return FetchResult(url, url, 0, "", error=f"{type(e).__name__}: {e}")
+        health.success()
         elapsed = time.monotonic() - t0
         if r.status_code == 429:
             limiter.slow_down()
             if backfill and domain in self.backfill_limiters:
                 self.backfill_limiters[domain].slow_down()
         return FetchResult(url, str(r.url), r.status_code, r.text, elapsed=elapsed)
+
+
+PAUSED = "domain paused"
+
+
+class DomainHealth:
+    """Tạm dừng một báo khi lỗi kết nối liên tiếp (thường là bị chặn IP hoặc trang sập).
+
+    Sau ``threshold`` lỗi liên tiếp: nghỉ ``base_pause`` giây, mỗi lần thử lại vẫn lỗi
+    thì nghỉ gấp đôi, tối đa ``max_pause``. Trong lúc nghỉ không gửi request nào,
+    các bài trong hàng đợi chờ chứ không bị đánh dấu thất bại.
+    """
+
+    def __init__(self, domain: str, threshold: int = 5, base_pause: float = 900, max_pause: float = 4 * 3600):
+        self.domain = domain
+        self.threshold = threshold
+        self.base_pause = base_pause
+        self.max_pause = max_pause
+        self.consecutive = 0
+        self.pause_seconds = 0.0
+        self.paused_until = 0.0
+        self.down_since: float | None = None  # time.time() lúc bắt đầu lỗi
+        self.recovered_after: float | None = None  # đặt khi vừa kết nối lại được
+
+    def remaining(self) -> float:
+        return max(0.0, self.paused_until - time.monotonic())
+
+    def failure(self) -> None:
+        self.consecutive += 1
+        if self.down_since is None:
+            self.down_since = time.time()
+        if self.consecutive >= self.threshold:
+            self.pause_seconds = (
+                self.base_pause if not self.pause_seconds else min(self.pause_seconds * 2, self.max_pause)
+            )
+            self.paused_until = time.monotonic() + self.pause_seconds
+            self.consecutive = 0
+            log.warning(
+                "[%s] %d lỗi kết nối liên tiếp: tạm dừng %d phút (có thể bị chặn IP hoặc trang sập)",
+                self.domain, self.threshold, self.pause_seconds // 60,
+            )
+
+    def success(self) -> None:
+        if self.down_since is not None and self.pause_seconds:
+            self.recovered_after = time.time() - self.down_since
+            log.info("[%s] Kết nối lại được sau %.0f phút", self.domain, self.recovered_after / 60)
+        self.consecutive = 0
+        self.pause_seconds = 0.0
+        self.paused_until = 0.0
+        self.down_since = None

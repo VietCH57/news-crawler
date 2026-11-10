@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from datetime import date, datetime, timedelta
 from typing import Any
 
@@ -12,7 +13,7 @@ import httpx
 from . import __version__
 from .config import Config, SourceConfig
 from .discover import backfill, rss
-from .fetcher import Fetcher, FetchResult
+from .fetcher import PAUSED, Fetcher, FetchResult
 from .normalize import content_hash, make_article_id, normalize_url
 from .parsers import get_parser
 from .sinks import FileSink, Sink
@@ -51,6 +52,7 @@ class Crawler:
         self.started = now()
         self._stop = asyncio.Event()
         self._alerted: dict[str, datetime] = {}
+        self._feed_polled: dict[str, float] = {}
 
     # ------------------------------------------------------------------ vòng đời
     async def close(self) -> None:
@@ -86,7 +88,7 @@ class Crawler:
 
     async def once(self, limit: int = 20) -> dict[str, int]:
         """Đọc RSS một lần rồi tải tối đa ``limit`` bài mỗi báo. Dùng để chạy thử."""
-        await asyncio.gather(*(self._poll(src) for src in self.sources.values()))
+        await asyncio.gather(*(self._poll(src, all_feeds=True) for src in self.sources.values()))
         done: dict[str, int] = {}
 
         async def drain(src: SourceConfig) -> None:
@@ -103,9 +105,29 @@ class Crawler:
         return done
 
     # ------------------------------------------------------------------ các vòng lặp
-    async def _poll(self, src: SourceConfig) -> None:
+    def _feeds_due(self, src: SourceConfig) -> list[str]:
+        """Feed đầu tiên (tin mới nhất) đọc mỗi ``rss_interval_seconds``;
+        feed chuyên mục chỉ là lưới an toàn nên đọc thưa hơn."""
+        t = time.monotonic()
+        due = []
+        for i, feed in enumerate(src.feeds):
+            interval = self.cfg.rss_interval_seconds if i == 0 else self.cfg.category_feed_interval_seconds
+            last = self._feed_polled.get(feed)
+            if last is None or t - last >= interval - 1:
+                due.append(feed)
+        return due
+
+    async def _poll(self, src: SourceConfig, all_feeds: bool = False) -> None:
+        if self.fetcher.paused_for(src.domain) > 0:
+            return
+        feeds = src.feeds if all_feeds else self._feeds_due(src)
+        if not feeds:
+            return
         try:
-            await rss.poll_source(src, self.fetcher, self.state, self.stats)
+            await rss.poll_source(src, self.fetcher, self.state, self.stats, feeds)
+            t = time.monotonic()
+            for f in feeds:
+                self._feed_polled[f] = t
         except Exception:  # noqa: BLE001
             log.exception("[%s] Lỗi khi đọc RSS", src.name)
 
@@ -116,6 +138,10 @@ class Crawler:
 
     async def _worker(self, src: SourceConfig) -> None:
         while True:
+            paused = self.fetcher.paused_for(src.domain)
+            if paused > 0:
+                await asyncio.sleep(min(paused, 60))
+                continue
             task = self.state.claim(src.name)
             if task is None:
                 await asyncio.sleep(1)
@@ -138,9 +164,29 @@ class Crawler:
     async def _heartbeat_loop(self) -> None:
         while True:
             self.state.set("heartbeat", now_iso())
+            self._check_recoveries()
             self.stats.flush()
             self._check_alerts()
             await asyncio.sleep(60)
+
+    def _check_recoveries(self) -> None:
+        """Một báo vừa kết nối lại sau thời gian bị chặn/sập: lấy bù bài của
+        những ngày đó từ sitemap và thử lại các việc đã thất bại vì lỗi mạng."""
+        for src in self.sources.values():
+            h = self.fetcher.health(src.domain)
+            if h.recovered_after is None:
+                continue
+            outage = h.recovered_after
+            h.recovered_after = None
+            start = now() - timedelta(seconds=outage)
+            self.stats.gap(to_iso(start), now_iso(), source=src.name, reason="không kết nối được")
+            n = self.state.requeue_failed(src.name)
+            log.info("[%s] Đưa lại %d việc thất bại vào hàng đợi", src.name, n)
+            if self.cfg.gap_fill and src.backfill.method and outage >= self.cfg.gap_threshold_minutes * 60:
+                key = f"gap_days:{src.name}"
+                days = {d.isoformat() for d in backfill.days_between(start.date(), now().date())}
+                self.state.set(key, sorted(set(self.state.get(key, [])) | days, reverse=True))
+                log.info("[%s] Lên lịch lấp khoảng trống %s", src.name, sorted(days))
 
     async def _backfill_loop(self, src: SourceConfig) -> None:
         if not src.backfill.method:
@@ -157,6 +203,8 @@ class Crawler:
 
     async def _backfill_step(self, src: SourceConfig) -> bool:
         """Liệt kê bài của một ngày (ưu tiên ngày bị lỡ do tắt máy). Trả về True nếu có việc."""
+        if self.fetcher.paused_for(src.domain) > 0:
+            return False
         if self.state.pending_count(src.name, BACKFILL_KINDS) >= self.cfg.backfill.max_pending:
             return False
 
@@ -253,6 +301,10 @@ class Crawler:
         res = await self.fetcher.fetch(task.url, backfill=task.kind in BACKFILL_KINDS)
         self.stats.incr(src.name, "fetched")
 
+        if res.status == 0 and res.error == PAUSED:
+            # Báo đang tạm dừng: việc chưa được gửi đi, chờ chứ không tính là thất bại.
+            self.state.retry(task.id, max(self.fetcher.paused_for(src.domain), 30), PAUSED, count=False)
+            return
         if res.status == 0:
             if res.error and "robots" in res.error:
                 self.state.fail(task.id, res.error)

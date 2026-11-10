@@ -82,9 +82,12 @@ class Stats:
         f["gz_bytes"] += size
         f["records"] += records
 
-    def gap(self, start: str, end: str) -> None:
+    def gap(self, start: str, end: str, source: str | None = None, reason: str = "crawler dừng") -> None:
         self._load_today()
-        self._data["gaps"].append({"from": start, "to": end})
+        g = {"from": start, "to": end, "reason": reason}
+        if source:
+            g["source"] = source
+        self._data["gaps"].append(g)
 
     def last_written_at(self, source: str) -> str | None:
         return self._src(source).get("last_written_at")

@@ -37,10 +37,14 @@ def parse_feed(text: str) -> list[dict]:
     return items
 
 
-async def poll_source(src: SourceConfig, fetcher: Fetcher, state: State, stats: Stats) -> int:
-    """Đọc mọi feed của một báo, đưa URL chưa thấy vào hàng đợi. Trả về số URL mới."""
+async def poll_source(
+    src: SourceConfig, fetcher: Fetcher, state: State, stats: Stats, feeds: list[str] | None = None
+) -> int:
+    """Đọc các feed của một báo, đưa URL chưa thấy vào hàng đợi. Trả về số URL mới."""
     new = 0
-    for feed_url in src.feeds:
+    for feed_url in feeds if feeds is not None else src.feeds:
+        if fetcher.paused_for(src.domain) > 0:
+            break
         res = await fetcher.fetch(feed_url)
         if not res.ok:
             log.warning("[%s] Không đọc được feed %s: %s %s", src.name, feed_url, res.status, res.error or "")

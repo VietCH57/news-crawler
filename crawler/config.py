@@ -41,6 +41,7 @@ class Config:
     user_agent: str
     data_dir: Path
     rss_interval_seconds: int = 300
+    category_feed_interval_seconds: int = 1800
     recheck_after_hours: list[float] = field(default_factory=lambda: [1, 6, 24])
     request_timeout: float = 20.0
     max_retries: int = 3
@@ -96,6 +97,7 @@ def load_config(path: str | Path) -> Config:
         user_agent=raw["user_agent"],
         data_dir=data_dir,
         rss_interval_seconds=int(raw.get("rss_interval_seconds", 300)),
+        category_feed_interval_seconds=int(raw.get("category_feed_interval_seconds", 1800)),
         recheck_after_hours=[float(x) for x in raw.get("recheck_after_hours", [1, 6, 24])],
         request_timeout=float(raw.get("request_timeout", 20)),
         max_retries=int(raw.get("max_retries", 3)),

@@ -246,12 +246,28 @@ class State:
     def done(self, task_id: int) -> None:
         self.db.execute("DELETE FROM frontier WHERE id=?", (task_id,))
 
-    def retry(self, task_id: int, delay_seconds: float, error: str) -> None:
+    def retry(self, task_id: int, delay_seconds: float, error: str, count: bool = True) -> None:
+        """Trả việc về hàng đợi. ``count=False``: không tính là một lần thử
+        (dùng khi báo đang bị tạm dừng, việc chưa hề được gửi đi)."""
         self.db.execute(
-            "UPDATE frontier SET status='pending', attempts=attempts+1, next_try_at=?, "
+            "UPDATE frontier SET status='pending', attempts=attempts+?, next_try_at=?, "
             "last_error=? WHERE id=?",
-            (to_iso(now() + timedelta(seconds=delay_seconds)), error[:500], task_id),
+            (1 if count else 0, to_iso(now() + timedelta(seconds=delay_seconds)), error[:500], task_id),
         )
+
+    def requeue_failed(self, source: str | None = None) -> int:
+        """Đưa các việc thất bại vì lỗi mạng về lại hàng đợi (ví dụ sau khi hết bị chặn).
+        Bỏ qua việc thất bại vì 404/410 hoặc robots.txt."""
+        sql = (
+            "UPDATE OR IGNORE frontier SET status='pending', attempts=0, next_try_at=? "
+            "WHERE status='failed' AND COALESCE(last_error,'') NOT LIKE 'HTTP 4%' "
+            "AND COALESCE(last_error,'') NOT LIKE 'robots%'"
+        )
+        params: list[Any] = [to_iso(now())]
+        if source:
+            sql += " AND source=?"
+            params.append(source)
+        return self.db.execute(sql, params).rowcount
 
     def fail(self, task_id: int, error: str) -> None:
         self.db.execute(
