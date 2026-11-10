@@ -3,6 +3,7 @@
     python tools/review_extraction.py                    # mọi báo, tối đa 5 bài mỗi báo
     python tools/review_extraction.py tienphong nhandan  # chỉ vài báo
     python tools/review_extraction.py --summary          # chỉ đếm theo cách trích xuất
+    python tools/review_extraction.py --errors vnexpress # chỉ bài LỖI và bài dùng trafilatura
 
 Dùng sau khi sửa parser để xem bài ảnh/video/bố cục lạ được xử lý thế nào.
 Không sửa dữ liệu đã lưu (HTML gốc vẫn giữ để vùng clean trích xuất lại).
@@ -26,6 +27,8 @@ from crawler.parsers import get_parser  # noqa: E402
 def main() -> None:
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     summary_only = "--summary" in sys.argv
+    errors_only = "--errors" in sys.argv
+    limit = 10 if errors_only else 5
     cfg = load_config(ROOT / "config.yaml")
     parsers = {n: get_parser(s.parser, cfg.min_words) for n, s in cfg.sources.items()}
     want = set(args) or set(cfg.sources)
@@ -45,7 +48,9 @@ def main() -> None:
                     kind += " (ngắn)" if p.media_type == "text" else f" ({p.media_type})"
                 kind += "" if p.parse_ok else " LỖI"
                 counts[s][kind] += 1
-                if summary_only or shown[s] >= 5 or (p.extract_method == "selector" and p.parse_ok and not p.is_short):
+                if summary_only or shown[s] >= limit or (p.extract_method == "selector" and p.parse_ok and not p.is_short):
+                    continue
+                if errors_only and p.parse_ok and not p.used_fallback:
                     continue
                 shown[s] += 1
                 print(f"[{s}] {kind} | {p.word_count} từ | {r['url']}")
