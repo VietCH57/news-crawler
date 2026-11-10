@@ -254,3 +254,43 @@ def test_category_feeds_polled_less_often(cfg):
         assert c._feeds_due(src) == [src.feeds[0]]  # 5 phút sau: chỉ feed tin mới
     finally:
         asyncio.run(c.close())
+
+
+def test_redirect_to_homepage_or_404_counts_as_removed(cfg):
+    # VnExpress, Tuổi Trẻ trả 200 kèm chuyển hướng về /404.html hoặc trang chủ khi bài bị gỡ.
+    _fast(cfg)
+    web = FakeWeb()
+
+    async def go():
+        c = Crawler(cfg, transport=httpx.MockTransport(web.handler))
+        try:
+            await c.once(limit=10)
+            st = c.state
+            web.redirects[TT1] = "https://tuoitre.vn/"
+            web.pages["https://tuoitre.vn/"] = (200, "<html><head><title>Báo Tuổi Trẻ</title></head><body>Trang chủ</body></html>")
+            st.db.execute("UPDATE articles SET next_recheck_at=?", (to_iso(now() - timedelta(minutes=1)),))
+            for a in st.due_rechecks(now()):
+                st.enqueue(a.article_id, a.url, a.source, "recheck")
+            while (t := st.claim("tuoitre", kinds=("recheck",))) is not None:
+                await c.process(t)
+            # Bài mới chuyển hướng ngay từ đầu: không ghi trang chủ thành bản tin.
+            web.redirects["https://tuoitre.vn/bai-moi-100261110000000001.htm"] = "https://tuoitre.vn/"
+            st.enqueue("x", "https://tuoitre.vn/bai-moi-100261110000000001.htm", "tuoitre", "rss")
+            while (t := st.claim("tuoitre")) is not None:
+                await c.process(t)
+        finally:
+            await c.close()
+
+    asyncio.run(go())
+    tt = [r for r in _records(cfg.data_dir) if r["source"] == "tuoitre"]
+    assert [r["is_removed"] for r in tt] == [False, True]
+    assert all(r["url"] != "https://tuoitre.vn/" for r in tt)
+
+
+def test_redirected_away_rule(cfg):
+    src = cfg.sources["vnexpress"]
+    away = Crawler._redirected_away
+    assert away(src, "https://vnexpress.net/a-5141666.html", "https://vnexpress.net/404.html")
+    assert away(src, "https://vnexpress.net/a-5141666.html", "https://vnexpress.net/")
+    assert not away(src, "https://vnexpress.net/a-5141666.html", "https://vnexpress.net/b-5141666.html")
+    assert not away(src, "https://vnexpress.net/a-5141666.html", "https://vnexpress.net/a-5141666.html")

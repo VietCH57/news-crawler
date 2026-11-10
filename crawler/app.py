@@ -14,7 +14,7 @@ from . import __version__
 from .config import Config, SourceConfig
 from .discover import backfill, rss
 from .fetcher import PAUSED, Fetcher, FetchResult
-from .normalize import content_hash, make_article_id, normalize_url
+from .normalize import content_hash, extract_native_id, make_article_id, normalize_url
 from .parsers import get_parser
 from .parsers.base import CORE_VERSION
 from .sinks import FileSink, Sink
@@ -310,6 +310,14 @@ class Crawler:
             return None
         return to_iso(from_iso(first_seen) + timedelta(hours=hours[idx]))
 
+    @staticmethod
+    def _redirected_away(src: SourceConfig, url: str, final_url: str) -> bool:
+        """URL gốc có mã số bài nhưng trang cuối cùng không còn mã số đó."""
+        if not src.id_pattern or final_url == url:
+            return False
+        native = extract_native_id(url, src.id_pattern)
+        return native is not None and extract_native_id(final_url, src.id_pattern) != native
+
     async def process(self, task: Task) -> None:
         src = self.sources[task.source]
         res = await self.fetcher.fetch(task.url, backfill=task.kind in BACKFILL_KINDS)
@@ -326,13 +334,23 @@ class Crawler:
                 self.stats.incr(src.name, "network_errors")
                 self._retry_or_fail(task, res.error or "network error")
             return
-        if res.status in (404, 410):
-            self.stats.incr(src.name, "http_4xx")
+        gone = res.status in (404, 410)
+        error = f"HTTP {res.status}"
+        if res.ok and self._redirected_away(src, task.url, res.final_url):
+            # Bài bị gỡ nhưng báo trả 200 kèm chuyển hướng về trang chủ hoặc /404.html
+            # (gặp ở VnExpress, Tuổi Trẻ ngày 10/11/2026): coi như 404, không ghi trang đó.
+            self.stats.incr(src.name, "redirected_away")
+            log.info("[%s] %s chuyển hướng sang %s: coi như bài đã gỡ", src.name, task.url, res.final_url)
+            gone = True
+            error = f"gone: chuyển hướng sang {res.final_url}"
+        if gone:
+            if res.status in (404, 410):
+                self.stats.incr(src.name, "http_4xx")
             if task.kind == "recheck":
                 self._write_removed(task, res)
                 self.state.done(task.id)
             else:
-                self.state.fail(task.id, f"HTTP {res.status}")
+                self.state.fail(task.id, error)
             return
         if res.status == 429 or res.status >= 500:
             self.stats.incr(src.name, "http_5xx" if res.status >= 500 else "http_4xx")

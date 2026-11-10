@@ -41,7 +41,7 @@ class ParsedArticle:
     # selector | selector+captions (bài ảnh/video: thêm chú thích ảnh) | trafilatura (bố cục lạ)
     extract_method: str = "selector"
     is_short: bool = False  # bài ảnh, video, infographic: chữ ít hơn min_words
-    # Chỉ xét khi bài ngắn: text | photo | video | audio | interactive.
+    # Chỉ xét khi bài ngắn: text | photo | video | audio | interactive | quiz.
     # Bài dài (kể cả podcast có lời thoại) luôn là "text".
     media_type: str = "text"
 
@@ -93,11 +93,13 @@ class BaseParser:
     # Dấu hiệu trang ảnh/video/podcast/đồ họa (khảo sát 10/11/2026). Xét theo thứ tự;
     # chỉ dùng khi bài ít chữ, vì bài thường cũng có thể nhúng video.
     media_markers: dict[str, list[str]] = {
+        "quiz": ['[data-component-type="quiz"]'],  # câu đố VnExpress, nạp bằng JavaScript
         "interactive": ['[data-component-type="widget_interactive"]', ".vne-gfx"],
         "audio": [".content-detail-podcast", ".tab-transcript", ".wrap-content-tab-vod", "audio"],
         "video": [
-            "body.video-page", "body.shortvideo-detail", ".video-player",
-            '[type="VideoStream"]', "video",
+            "body.video-page", "body.shortvideo-detail", ".video-player", ".detail_shortvideo",
+            ".nd-detail-video", "b.video-element", ".video__summary",
+            '[type="VideoStream"]', 'iframe[src*="youtube.com/embed"]', "video",
         ],
         "photo": ["body.photo-page", ".photo-detail-img"],
     }
@@ -173,19 +175,21 @@ class BaseParser:
         return [p for p in paras if p]
 
     # ---------- trích xuất ----------
-    def _container_and_captions(self, tree: LexborHTMLParser) -> tuple[bool, list[str]]:
+    def _container_and_captions(self, tree: LexborHTMLParser) -> tuple[bool, list[str], bool]:
+        """(có khung bài, chú thích ảnh, khung có ảnh)."""
         for sel in self.container_selectors:
             box = tree.css_first(sel)
             if box is None:
                 continue
+            has_img = box.css_first("img, figure, [data-large-src]") is not None
             caps: list[str] = []
             for csel in self.caption_selectors:
                 for node in box.css(csel):
                     t = clean_text(node.text(separator=" ", strip=True))
                     if t and t not in caps:
                         caps.append(t)
-            return True, caps
-        return False, []
+            return True, caps, has_img
+        return False, [], False
 
     def detect_media(self, tree: LexborHTMLParser) -> str:
         for kind, selectors in self.media_markers.items():
@@ -199,7 +203,7 @@ class BaseParser:
         # Xét trước khi bỏ phần tử: Tuổi Trẻ đặt video trong khối bị bỏ.
         media = self.detect_media(tree)
         # Lấy chú thích ảnh trước khi bỏ <figure> (cần cho bài ảnh).
-        has_container, captions = self._container_and_captions(tree)
+        has_container, captions, has_img = self._container_and_captions(tree)
         for sel in self.drop_selectors:
             for node in tree.css(sel):
                 node.decompose()
@@ -253,6 +257,9 @@ class BaseParser:
 
         self.post_process(art, tree, news, url)
         art.is_short = art.word_count < self.min_words
+        if media == "text" and has_container and has_img and art.word_count == 0:
+            # Thân bài chỉ có ảnh, không chú thích: infographic, thông báo, kết quả xổ số.
+            media = "photo"
         art.media_type = media if art.is_short else "text"
         # Đạt nếu có tiêu đề và: đủ chữ; hoặc bài ngắn lấy đúng từ khung bài; hoặc là trang
         # ảnh/video/podcast/đồ họa (ít hoặc không có chữ là thật, sapo vẫn có).

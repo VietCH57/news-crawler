@@ -133,11 +133,12 @@ class ZceParser(BaseParser):
     ``.article__sapo``, ``.article__body.zce-content-body``, ``.article__meta``."""
 
     name = "zce"
-    version = "2"
+    version = "3"
     sapo_selectors = [".article__sapo"]
-    content_selectors = [".article__body > p", ".article__body p"]
+    # Bài e-magazine Nhân Dân (/special/.../index.html) dựng bằng khối Theme-Layer-BodyText.
+    content_selectors = [".article__body > p", ".article__body p", ".Theme-Layer-BodyText--inner > p"]
     # Trang ảnh (body.photo-page) không có .article__body: nội dung là chú thích ảnh.
-    container_selectors = [".article__body", ".photo-detail-img"]
+    container_selectors = [".article__body", ".photo-detail-img", ".Theme-Layer-BodyText--inner"]
     author_selectors = [".article__meta .cms-author", ".article__meta .wrap-author", ".article__author"]
     drop_selectors = [".article__body figure", ".article__body table", ".article__body .box-related"]
     sapo_prefixes = ["TPO - ", "TPO-", "(TTXVN/Vietnam+) - ", "NDO - ", "NDĐT - "]
@@ -170,9 +171,10 @@ class VtcParser(BaseParser):
     """Sapo và tác giả lấy từ JSON-LD (selector trên trang lẫn quảng cáo)."""
 
     name = "vtcnews"
-    version = "1"
-    content_selectors = [".edittor-content > p", ".edittor-content p"]
-    container_selectors = [".edittor-content"]
+    version = "2"
+    # Trang video: mô tả nằm trong .nd-detail-video.
+    content_selectors = [".edittor-content > p", ".edittor-content p", ".nd-detail-video > p"]
+    container_selectors = [".edittor-content", ".nd-detail-video"]
     drop_selectors = [".edittor-content figure", ".edittor-content table", ".edittor-content .sponsored-banner"]
 
 
@@ -198,10 +200,11 @@ class VovParser(BaseParser):
     """VOV: tác giả dạng "Trọng Phú/VOV.VN", sapo bắt đầu bằng "VOV.VN - "."""
 
     name = "vov"
-    version = "1"
+    version = "2"
     sapo_selectors = [".article-summary"]
-    content_selectors = [".text-long > p", ".article-content p"]
-    container_selectors = [".text-long", ".article-content"]
+    # Trang video: mô tả nằm trong .video__summary.
+    content_selectors = [".text-long > p", ".article-content p", ".video__summary p", ".video__summary"]
+    container_selectors = [".text-long", ".article-content", ".video__summary"]
     drop_selectors = [".text-long figure", ".text-long table"]
     sapo_prefixes = ["VOV.VN - ", "VOV.VN -", "VOV - "]
     _SUFFIX = re.compile(r"\s*/\s*VOV(\.VN)?\s*$", re.I)

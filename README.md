@@ -78,10 +78,10 @@ data/
 ```
 
 - Mỗi dòng trong file `.jsonl.gz` là một bản tin. Các trường gồm: `article_id`, `url`, `source`, `crawl_kind`, `version_no`, `content_hash`, `is_removed`, `title`, `sapo`, `content`, `author`, `category_raw`, `tags`, `published_at`, `crawled_at`, `http_status`, `parse_ok`, `extract_method`, `word_count`, `is_short`, `media_type`, `parser_version`, `html`.
-- `extract_method`: `selector` (bài thường), `selector+captions` (bài ảnh: thêm chú thích ảnh), `trafilatura` (bố cục lạ, cần xem lại). `is_short: true` là bài có ít chữ; nên lọc riêng khi phân tích từ khóa. Với bài ít chữ, `media_type` cho biết loại trang: `photo`, `video`, `audio` (podcast, bản tin nghe), `interactive` (đồ họa tương tác nạp bằng JavaScript, crawler không lấy được chữ), hoặc `text`. Bài đủ chữ luôn có `media_type: text`, kể cả podcast có lời thoại. Trang ảnh/video/podcast được coi là trích xuất đạt dù không có chữ; tiêu đề và sapo vẫn có. Các trường này có từ ngày 10/11/2026; bản tin trước đó không có.
+- `extract_method`: `selector` (bài thường), `selector+captions` (bài ảnh: thêm chú thích ảnh), `trafilatura` (bố cục lạ, cần xem lại). `is_short: true` là bài có ít chữ; nên lọc riêng khi phân tích từ khóa. Với bài ít chữ, `media_type` cho biết loại trang: `photo` (kể cả bài chỉ có ảnh: infographic, kết quả xổ số), `video`, `audio` (podcast, bản tin nghe), `interactive` (đồ họa tương tác nạp bằng JavaScript, crawler không lấy được chữ), `quiz` (câu đố VnExpress), hoặc `text`. Bài đủ chữ luôn có `media_type: text`, kể cả podcast có lời thoại. Trang ảnh/video/podcast được coi là trích xuất đạt dù không có chữ; tiêu đề và sapo vẫn có. Các trường này có từ ngày 10/11/2026; bản tin trước đó không có.
 - `dt`/`hour` là **giờ thu thập**, cùng cấu trúc với vùng landing trên HDFS.
 - `article_id` = SHA-1 của `báo:mã số bài`. Mã số này nằm ở cuối URL và không đổi khi báo sửa tiêu đề.
-- Mỗi bài mới được tải lại sau 1, 6 và 24 giờ. Nếu nội dung đổi, crawler ghi thêm bản tin với `version_no` tăng lên. Nếu bài bị gỡ (404/410), crawler ghi bản tin `is_removed: true`.
+- Mỗi bài mới được tải lại sau 1, 6 và 24 giờ. Nếu nội dung đổi, crawler ghi thêm bản tin với `version_no` tăng lên. Nếu bài bị gỡ (404/410, hoặc báo chuyển hướng về trang chủ hay `/404.html`), crawler ghi bản tin `is_removed: true`.
 - Khi máy tắt quá 30 phút, lần chạy sau tự lấy bài của những ngày bị lỡ (`crawl_kind: gap`).
 
 Xem nhanh dữ liệu:

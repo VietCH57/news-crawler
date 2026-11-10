@@ -145,3 +145,52 @@ def test_empty_container_without_media_is_still_an_error():
     body = '<div class="detail-content"></div>'
     a = get_parser("tuoitre").parse(_page("Trang lỗi", body), "https://tuoitre.vn/x-100261107165046509.htm")
     assert a.media_type == "text" and not a.parse_ok
+
+
+def test_vnexpress_quiz():
+    html = _page(
+        "Nước nào có nữ thủ tướng đầu tiên?",
+        '<article class="fck_detail"><p class="description">Bà là người nước nào?</p>'
+        '<div data-widget="obj"><div id="quiz-9435" data-component-type="quiz"></div></div>'
+        '<p class="Normal" style="text-align:right;"><strong>Khánh Linh</strong></p></article>',
+    )
+    a = get_parser("vnexpress").parse(html, "https://vnexpress.net/x-5142584.html")
+    assert a.media_type == "quiz" and a.parse_ok and a.author == "Khánh Linh"
+
+
+def test_image_only_body_is_photo():
+    # Kết quả xổ số SGGP, thông báo đấu giá Tuổi Trẻ, infographic VOV: chỉ có ảnh.
+    body = '<div class="article__body"><figure><img data-src="kq.webp"/></figure><div class="article__author">XSKT</div></div>'
+    a = get_parser("sggp").parse(_page("Kết quả xổ số", body), "https://www.sggp.org.vn/x-post881011.html")
+    assert a.media_type == "photo" and a.parse_ok
+
+
+def test_nhandan_emagazine():
+    blocks = "".join(
+        '<div class="Theme-Layer-BodyText"><div class="Theme-Layer-BodyText--inner">'
+        + "".join(f"<p>Khối {b} đoạn {i}: nâng chuẩn chất lượng bệnh viện công tại thành phố.</p>" for i in range(4))
+        + "</div></div>"
+        for b in range(2)
+    )
+    a = get_parser("nhandan").parse(_page("Nâng chuẩn chất lượng bệnh viện công", blocks), "https://nhandan.vn/special/x/index.html")
+    assert a.extract_method == "selector" and a.parse_ok
+    assert a.content.startswith("Khối 0 đoạn 0") and "Khối 1 đoạn 3" in a.content and "Đánh giá" not in a.content
+
+
+def test_vtc_video_pages():
+    yt = '<div class="edittor-content"><p><iframe src="https://www.youtube.com/embed/abc"></iframe></p><div class="author-make">VTC News</div></div>'
+    a = get_parser("vtcnews").parse(_page("Bê bối CEO", yt), "https://vtcnews.vn/x-ar1050185.html")
+    assert a.media_type == "video" and a.parse_ok
+    page = '<div class="nd-detail-video"><p>Ở ấp Lâm Dồ, anh Thạch Hoàng Minh chọn cách dạy dân làm giàu.</p></div>'
+    a = get_parser("vtcnews").parse(_page("Chuyện chưa kể", page), "https://vtcnews.vn/x-ar1049411.html")
+    assert a.content.startswith("Ở ấp Lâm Dồ") and a.media_type == "video" and a.extract_method == "selector"
+
+
+def test_vov_video_summary():
+    page = (
+        '<article class="detail"><div class="video"><figcaption class="video-figcaption">'
+        '<div class="video__summary"><p>Dàn cầu thủ U23 Việt Nam đối mặt lịch thi đấu dày đặc.</p></div>'
+        "</figcaption></div></article>"
+    )
+    a = get_parser("vov").parse(_page("Tin bóng đá 10-11", page), "https://vov.vn/x-post1348927.vov")
+    assert a.content.startswith("Dàn cầu thủ") and a.media_type == "video" and a.extract_method == "selector"
