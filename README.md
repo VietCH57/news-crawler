@@ -113,6 +113,17 @@ Dùng `deploy/news-crawler.service`; hướng dẫn nằm ở đầu file. Trên
 python tools/check_sources.py sggp vov          # đọc feed + trích xuất thử một bài
 python tools/review_extraction.py --summary     # đếm bài theo cách trích xuất, trên dữ liệu đã lưu
 python tools/review_extraction.py tienphong     # liệt kê bài ảnh/video/bố cục lạ của một báo
+python tools/review_extraction.py --errors      # chỉ bài lỗi và bài dùng trafilatura
+```
+
+## Đẩy dữ liệu khỏi server
+
+`tools/offload_hf.py` đẩy các file `.jsonl.gz` đã đóng (cũ hơn 24 giờ) lên một dataset **riêng tư** trên Hugging Face (tài khoản miễn phí có 100 GB riêng tư), kiểm tra kích thước rồi mới xóa bản trên server. Không đụng tới `data/state`.
+
+```bash
+export HF_TOKEN=hf_xxx      # token quyền Write
+python tools/offload_hf.py --repo <tên>/news-crawler-data --dry-run
+python tools/offload_hf.py --repo <tên>/news-crawler-data
 ```
 
 ## Khi báo đổi giao diện

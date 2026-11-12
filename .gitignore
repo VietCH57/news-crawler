@@ -86,3 +86,6 @@ Thumbs.db
 ehthumbs.db
 desktop.ini
 $RECYCLE.BIN/
+
+# Token Hugging Face cho tools/offload_hf.py
+.hf_token
