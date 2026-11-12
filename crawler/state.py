@@ -262,6 +262,7 @@ class State:
             "UPDATE OR IGNORE frontier SET status='pending', attempts=0, next_try_at=? "
             "WHERE status='failed' AND COALESCE(last_error,'') NOT LIKE 'HTTP 4%' "
             "AND COALESCE(last_error,'') NOT LIKE 'gone%' "
+            "AND COALESCE(last_error,'') NOT LIKE 'bad url%' "
             "AND COALESCE(last_error,'') NOT LIKE 'robots%'"
         )
         params: list[Any] = [to_iso(now())]

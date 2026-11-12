@@ -48,3 +48,12 @@ def test_parse_sitemap_locs_handles_cdata_and_entities():
 
 def test_days_between_newest_first():
     assert days_between(date(2026, 11, 6), date(2026, 11, 8)) == [date(2026, 11, 8), date(2026, 11, 7), date(2026, 11, 6)]
+
+
+def test_vnexpress_last_page_next_button_is_javascript():
+    html = (
+        '<h3 class="title-news"><a href="https://vnexpress.net/bai-5140001.html">Bài</a></h3>'
+        '<a class="btn-page next-page" href="javascript:;">Sau</a>'
+    )
+    links, nxt = _vnexpress_links(html, "https://vnexpress.net/category/day/x", r"-(\d+)\.html$")
+    assert links == ["https://vnexpress.net/bai-5140001.html"] and nxt is None

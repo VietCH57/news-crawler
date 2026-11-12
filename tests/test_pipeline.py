@@ -173,7 +173,6 @@ def test_run_loop_with_gap_and_backfill(cfg):
             await asyncio.wait_for(runner, 5)
         finally:
             await c.close()
-        return c
 
     asyncio.run(go())
     recs = _records(cfg.data_dir)
@@ -294,3 +293,53 @@ def test_redirected_away_rule(cfg):
     assert away(src, "https://vnexpress.net/a-5141666.html", "https://vnexpress.net/")
     assert not away(src, "https://vnexpress.net/a-5141666.html", "https://vnexpress.net/b-5141666.html")
     assert not away(src, "https://vnexpress.net/a-5141666.html", "https://vnexpress.net/a-5141666.html")
+
+
+def test_redirect_to_broken_url_fails_only_that_article(cfg, monkeypatch):
+    from crawler.fetcher import BAD_URL, Fetcher
+
+    async def boom(self, url, **kw):
+        raise ValueError("unknown url type: '/;'")
+
+    async def go():
+        f = Fetcher("ua", 5, {"vov.vn": 1000}, {}, transport=httpx.MockTransport(lambda r: httpx.Response(404)))
+        try:
+            await f.allowed("https://vov.vn/x-post1.vov")  # nạp robots.txt trước
+            monkeypatch.setattr(f.client, "get", boom.__get__(f.client))
+            r = await f.fetch("https://vov.vn/x-post1.vov")
+            return r, f.health("vov.vn").consecutive
+        finally:
+            await f.close()
+
+    r, fails = asyncio.run(go())
+    assert r.status == 0 and r.error.startswith(BAD_URL)
+    assert fails == 0  # không làm báo bị tạm dừng
+
+
+def test_vnexpress_category_backfill_runs_once(cfg):
+    from datetime import date
+
+    _fast(cfg)
+    cfg.backfill.enabled = True
+    cfg.backfill.until = date(2026, 5, 8)
+    src_cfg = cfg.sources["vnexpress"]
+    src_cfg.backfill.method = "vnexpress_category_pages"  # cách dự phòng
+    src_cfg.backfill.category_paths = ["thoi-su"]
+    web = FakeWeb()
+    web.pages["https://vnexpress.net/thoi-su"] = (200, fixture_text("vnexpress_archive.html"))
+
+    async def go():
+        c = Crawler(cfg, transport=httpx.MockTransport(web.handler))
+        try:
+            src = c.sources["vnexpress"]
+            first = await c._backfill_step(src)
+            pending = c.state.pending_count("vnexpress", ("backfill",))
+            hits = len(web.hits)
+            second = await c._backfill_step(src)
+            return first, pending, second, len(web.hits) - hits
+        finally:
+            await c.close()
+
+    first, pending, second, extra_hits = asyncio.run(go())
+    assert first and pending > 0
+    assert not second and extra_hits == 0  # không liệt kê lại lần hai

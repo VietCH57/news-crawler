@@ -2,7 +2,9 @@
 
 Mỗi báo một cách (khảo sát 8/11/2026):
 - VnExpress: sitemap theo ngày bị chuyển hướng về trang chủ, nên dùng trang lưu trữ
-  theo ngày của từng chuyên mục.
+  theo ngày của từng chuyên mục (``vnexpress_day_archive``). Dự phòng nếu trang này mất:
+  ``vnexpress_category_pages`` đọc trang phân trang chuyên mục (``/thoi-su-p2``... tối đa
+  p20), không chia theo ngày nên chỉ liệt kê một lần (``ONE_SHOT``) và chỉ lùi được vài tuần.
 - Tuổi Trẻ: sitemap tĩnh 5 ngày một file ``/StaticSitemaps/sitemaps-YYYY-M-a-b.xml``.
 - Dân trí: sitemap theo tháng ``/sitemaps/Article-YYYY-MM-01.xml``; mã số bài bắt đầu
   bằng ``yyyyMMdd`` nên lọc được theo ngày.
@@ -162,8 +164,11 @@ def _vnexpress_links(html: str, base: str, id_pattern: str) -> tuple[list[str], 
     nxt = None
     for sel in ('a[rel="next"]', "a.next-page", "a.btn-page.next-page"):
         node = tree.css_first(sel)
-        if node is not None and node.attributes.get("href"):
-            nxt = urljoin(base, node.attributes["href"])
+        href = (node.attributes.get("href") or "").strip() if node is not None else ""
+        if href:
+            cand = urljoin(base, href)
+            # Trang cuối: nút "trang sau" vẫn còn nhưng href="javascript:;" (lỗi ngày 12/11/2026).
+            nxt = cand if cand.startswith(("https://", "http://")) else None
             break
     return links, nxt
 
@@ -224,7 +229,43 @@ async def list_index_monthly_lastmod(fetcher: Fetcher, src: SourceConfig, day: d
     return out
 
 
+async def _category_pages(fetcher: Fetcher, src: SourceConfig, pages: int) -> list[str]:
+    out: list[str] = []
+    for path in src.backfill.category_paths:
+        for p in range(1, pages + 1):
+            url = f"https://{src.host or src.domain}/{path}" + (f"-p{p}" if p > 1 else "")
+            res = await fetcher.fetch(url, backfill=True)
+            if not res.ok or normalize_url(res.final_url).rstrip("/") != normalize_url(url).rstrip("/"):
+                break  # hết trang: báo chuyển hướng về trang chủ hoặc trang lỗi
+            links, _ = _vnexpress_links(res.text, res.final_url, src.id_pattern)
+            new = [u for u in links if u not in out]
+            if not new:
+                break
+            out.extend(new)
+    return out
+
+
+async def list_all_category_pages(fetcher: Fetcher, src: SourceConfig) -> list[str]:
+    """Crawl ngược một lần: mọi trang của mọi chuyên mục."""
+    return await _category_pages(fetcher, src, src.backfill.max_pages)
+
+
+async def list_recent_category_pages(fetcher: Fetcher, src: SourceConfig, day: date) -> list[str]:
+    """Lấp khoảng trống sau khi máy tắt: vài trang đầu (khoảng 2-3 ngày gần nhất)
+    là đủ; kết quả giữ trong bộ nhớ để các ngày bị lỡ dùng chung một lần tải."""
+    key = f"recent:{src.name}"
+    urls = _cache.get(key)
+    if urls is None:
+        urls = await _category_pages(fetcher, src, 5)
+        _cache.put(key, urls)
+    return urls
+
+
+# Cách liệt kê không chia theo ngày: chạy một lần cho cả đợt crawl ngược.
+ONE_SHOT = {"vnexpress_category_pages": list_all_category_pages}
+
 LISTERS = {
+    "vnexpress_category_pages": list_recent_category_pages,
     "vnexpress_day_archive": list_vnexpress,
     "tuoitre_static_sitemap": list_tuoitre,
     "dantri_monthly_sitemap": list_dantri,

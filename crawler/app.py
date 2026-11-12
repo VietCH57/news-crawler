@@ -13,7 +13,7 @@ import httpx
 from . import __version__
 from .config import Config, SourceConfig
 from .discover import backfill, rss
-from .fetcher import PAUSED, Fetcher, FetchResult
+from .fetcher import BAD_URL, PAUSED, Fetcher, FetchResult
 from .normalize import content_hash, extract_native_id, make_article_id, normalize_url
 from .parsers import get_parser
 from .parsers.base import CORE_VERSION
@@ -233,6 +233,15 @@ class Crawler:
 
         if not self.cfg.backfill.enabled or self.cfg.backfill.until is None:
             return False
+        one_shot = backfill.ONE_SHOT.get(src.backfill.method or "")
+        if one_shot is not None:
+            done_key = f"backfill_once:{src.name}"
+            if self.state.get(done_key):
+                return False
+            n = self._enqueue_urls(src, await one_shot(self.fetcher, src), "backfill", None)
+            self.state.set(done_key, now_iso())
+            log.info("[%s] Crawl ngược (liệt kê một lần theo chuyên mục): %d URL mới", src.name, n)
+            return True
         cur_key = f"backfill_cursor:{src.name}"
         cursor = self.state.get(cur_key)
         day = date.fromisoformat(cursor) if cursor else now().date() - timedelta(days=1)
@@ -247,6 +256,9 @@ class Crawler:
 
     async def _enqueue_day(self, src: SourceConfig, day: date, kind: str) -> int:
         urls = await backfill.list_day(self.fetcher, src, day)
+        return self._enqueue_urls(src, urls, kind, day)
+
+    def _enqueue_urls(self, src: SourceConfig, urls: list[str], kind: str, day: date | None) -> int:
         n = 0
         for u in urls:
             url = normalize_url(u, src.host)
@@ -255,7 +267,8 @@ class Crawler:
             aid = make_article_id(src.name, url, src.id_pattern)
             if self.state.seen(aid):
                 continue
-            if self.state.enqueue(aid, url, src.name, kind, {"listed_day": day.isoformat()}):
+            hint = {"listed_day": day.isoformat()} if day else {}
+            if self.state.enqueue(aid, url, src.name, kind, hint):
                 n += 1
         if n:
             self.stats.incr(src.name, "discovered", n)
@@ -328,7 +341,7 @@ class Crawler:
             self.state.retry(task.id, max(self.fetcher.paused_for(src.domain), 30), PAUSED, count=False)
             return
         if res.status == 0:
-            if res.error and "robots" in res.error:
+            if res.error and ("robots" in res.error or res.error.startswith(BAD_URL)):
                 self.state.fail(task.id, res.error)
             else:
                 self.stats.incr(src.name, "network_errors")

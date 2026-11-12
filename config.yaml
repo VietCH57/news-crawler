@@ -48,13 +48,16 @@ sources:
       - https://vnexpress.net/rss/giai-tri.rss
       - https://vnexpress.net/rss/khoa-hoc-cong-nghe.rss
     backfill:
-      # Sitemap theo ngày của VnExpress chuyển hướng về trang chủ, nên dùng
-      # trang lưu trữ theo ngày của từng chuyên mục.
+      # Sitemap theo ngày của VnExpress chuyển hướng về trang chủ, nên dùng trang lưu trữ
+      # theo ngày của từng chuyên mục (kiểm tra lại ngày 12/11/2026, từ 8/5 đến 11/11 đều có bài).
       method: vnexpress_day_archive
-      # Chỉ 1001005 (Thời sự) đã được kiểm tra. Các mã còn lại lấy từ trí nhớ:
-      # mở https://vnexpress.net/category/day/cateid/<mã>/fromdate/<ts>/todate/<ts>/allcate/<mã>
-      # để kiểm tra trước khi bật crawl ngược.
-      category_ids: [1001005, 1001002, 1003159, 1001007, 1003497, 1003750, 1002565, 1002691, 1001009]
+      # Đã kiểm tra ngày 10/11/2026: Thời sự, Thế giới, Kinh doanh, Pháp luật, Giáo dục,
+      # Sức khỏe, Thể thao, Giải trí, Khoa học công nghệ (1006219; mã cũ 1001009 không còn bài).
+      category_ids: [1001005, 1001002, 1003159, 1001007, 1003497, 1003750, 1002565, 1002691, 1006219]
+      # Dự phòng nếu trang lưu trữ theo ngày mất (chỉ lùi được vài tuần):
+      # method: vnexpress_category_pages
+      # category_paths: [thoi-su, the-gioi, kinh-doanh, phap-luat, giao-duc, suc-khoe,
+      #                  the-thao, giai-tri, khoa-hoc-cong-nghe]
 
   tuoitre:
     domain: tuoitre.vn

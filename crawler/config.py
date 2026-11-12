@@ -16,6 +16,8 @@ class BackfillSourceConfig:
     category_ids: list[int] = field(default_factory=list)
     url_template: str | None = None  # ví dụ https://nhandan.vn/sitemaps/news-{year}-{month}.xml
     index_url: str | None = None  # sitemap index (VietnamNet)
+    category_paths: list[str] = field(default_factory=list)  # chuyên mục có trang /<path>-p2...
+    max_pages: int = 20
 
 
 @dataclass
@@ -94,6 +96,8 @@ def load_config(path: str | Path) -> Config:
                 category_ids=[int(x) for x in (bf.get("category_ids") or [])],
                 url_template=bf.get("url_template"),
                 index_url=bf.get("index_url"),
+                category_paths=list(bf.get("category_paths") or []),
+                max_pages=int(bf.get("max_pages", 20)),
             ),
         )
 

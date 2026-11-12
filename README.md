@@ -6,7 +6,7 @@ Crawler báo điện tử Việt Nam cho bài tập lớn môn Lưu trữ và x�
 
 | Báo | Nguồn bài mới | Bài cũ (crawl ngược, lấp khoảng trống) | Tốc độ |
 |---|---|---|---|
-| VnExpress | RSS | Trang lưu trữ theo ngày | 1 req/s |
+| VnExpress | RSS | Trang lưu trữ theo ngày của 9 chuyên mục | 1 req/s |
 | Tuổi Trẻ | RSS | Sitemap 5 ngày | 1 req/s |
 | Thanh Niên | RSS | Sitemap 5 ngày | 0,5 req/s |
 | VietnamNet | Google News sitemap (RSS nặng 1 MB) | Sitemap tháng, lọc theo lastmod | 0,5 req/s |
@@ -101,11 +101,7 @@ backfill:
   until: 2026-05-08
 ```
 
-Với VnExpress, crawler dùng trang lưu trữ theo ngày của từng chuyên mục. Mới chỉ mã `1001005` (Thời sự) được kiểm tra. Hãy mở thử URL của các mã khác trước khi bật:
-
-```
-https://vnexpress.net/category/day/cateid/<mã>/fromdate/1778173200/todate/1778259599/allcate/<mã>
-```
+VnExpress dùng trang lưu trữ theo ngày của 9 chuyên mục trong `config.yaml` (đã kiểm tra ngày 12/11/2026). Nếu trang này không còn dùng được, đổi sang cách dự phòng `vnexpress_category_pages` (ghi sẵn trong `config.yaml`, chỉ lùi được vài tuần).
 
 ## Chạy lâu dài trên Ubuntu
 

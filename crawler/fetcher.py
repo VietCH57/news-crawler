@@ -181,6 +181,10 @@ class Fetcher:
         except httpx.HTTPError as e:
             health.failure()
             return FetchResult(url, url, 0, "", error=f"{type(e).__name__}: {e}")
+        except (ValueError, UnicodeError) as e:
+            # Báo chuyển hướng tới địa chỉ hỏng (gặp ngày 12/11/2026: "unknown url type: '/;'").
+            # Lỗi của riêng bài này, không phải lỗi mạng: không tính vào sức khỏe của báo.
+            return FetchResult(url, url, 0, "", error=f"{BAD_URL}: {type(e).__name__}: {e}")
         health.success()
         elapsed = time.monotonic() - t0
         if r.status_code == 429:
@@ -191,6 +195,7 @@ class Fetcher:
 
 
 PAUSED = "domain paused"
+BAD_URL = "bad url"
 
 
 class DomainHealth:
